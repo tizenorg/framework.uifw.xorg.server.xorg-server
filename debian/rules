@@ -1,0 +1,335 @@
+#!/usr/bin/make -f
+# debian/rules for the Debian xorg-server package.
+# Copyright © 2004 Scott James Remnant <scott@netsplit.com>
+# Copyright © 2005 Daniel Stone <daniel@fooishbar.org>
+# Copyright © 2005 David Nusinow <dnusinow@debian.org>
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include debian/xsfbs/xsfbs.mk
+
+CFLAGS += -Wall -g
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -O0
+else
+	CFLAGS += -O2
+endif
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+	MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+#CPPFLAGS += -DPRE_RELEASE=0
+
+#######SLP features##############################################################
+# to print udev debug message
+CFLAGS += -D_F_UDEV_DEBUG_
+# not to print error messages related to floating devices
+CFLAGS += -D_F_NO_FLOATINGDEVICE_ERROR_
+# not to deal with the specific sinals at the signal handler(those are dealt at sys-assert) - SIGSEGV, SIGQUIT, SIGILL, SIGFPE, SIGBUS
+CFLAGS += -D_F_NO_CATCH_SIGNAL_
+# ubuntu patch : 189_xserver_1.5.0_bg_none_root.patch
+CFLAGS += -D_F_BG_NONE_ROOT_
+# apply/enable XI2 sendevent patch
+CFLAGS += -D_F_ENABLE_XI2_SENDEVENT_
+# check the null client - fix the crash of the xserver
+CFLAGS += -D_F_CHECK_NULL_CLIENT_
+# enable dynamic miEventQueue handling
+CFLAGS += -D_F_DYNAMIC_MIEQ_
+# disable updating grabTime for the first pointer(1st mt) device with the other mt device's grabTime
+CFLAGS += -D_F_NO_GRABTIME_UPDATE_
+# change DRI2 invalidate event
+#CFLAGS += -D_F_DRI2_INVALIDATE_
+# change DRI2 for async swap buffer
+#CFLAGS += -D_F_DRI2_CW_PATCH
+# change Composite for H/W Overlay layer
+CFLAGS += -D_F_COMP_OVL_PATCH
+# enable gesture support
+CFLAGS += -D_F_GESTURE_EXTENSION_
+###########################################################################################
+
+DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+DEB_HOST_ARCH_OS   ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
+ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
+	confflags += --build=$(DEB_HOST_GNU_TYPE)
+else
+	confflags += --build=$(DEB_HOST_GNU_TYPE) --host=$(DEB_HOST_GNU_TYPE)
+endif
+
+# udeb is arch-dependent...
+ifneq (, $(filter %-udeb, $(shell dh_listpackages -s)))
+	udeb = yes
+endif
+
+# ...but let's support disabling it to speed up debug builds:
+ifneq (,$(filter noudeb,$(DEB_BUILD_OPTIONS)))
+	udeb =
+	DH_INSTALL_OPTIONS = -Nxserver-xorg-core-udeb
+endif
+
+build_xfbdev = --disable-xfbdev
+selinux = --disable-xselinux
+dri = --disable-dri --enable-dri2
+config_backend = --disable-config-dbus
+ifneq (,$(findstring arm,$(DEB_HOST_ARCH)))
+	config_backend += --enable-config-udev --disable-config-hal
+else
+	config_backend += --enable-config-udev --disable-config-hal
+endif
+config_tests = --disable-unit-tests
+
+#ifeq ($(DEB_HOST_ARCH_OS), linux)
+#	build_xfbdev = --disable-xfbdev
+#	selinux = --disable-xselinux
+#else
+#	build_xfbdev = --disable-xfbdev
+#	selinux = --disable-xselinux
+#endif
+#ifeq ($(DEB_HOST_ARCH_OS), hurd)
+#	dri = --disable-dri --disable-dri2
+#else
+#	dri = --disable-dri --enable-dri2
+#endif
+#config_backend = --disable-config-dbus
+#ifeq ($(DEB_HOST_ARCH_OS), linux)
+#	config_backend += --enable-config-udev --disable-config-hal
+#else ifeq ($(DEB_HOST_ARCH_OS), kfreebsd)
+#	config_backend += --disable-config-udev --enable-config-hal
+#else # hurd
+#	config_backend += --disable-config-udev --disable-config-hal
+#endif
+#ifneq (,$(filter nocheck, $(DEB_BUILD_OPTIONS)))
+#	config_tests = --disable-unit-tests
+#else
+#	config_tests = --enable-unit-tests
+#endif
+
+INSTALL=/usr/bin/install
+
+VENDOR=SLP(Samsung Linux Platform)
+BUILDER=For technical support please see http://
+
+# disable-static is so we don't get libfoo.a for modules.  now if only we could
+# kill the .las.
+confflags += \
+	     --disable-strict-compilation \
+	     --disable-static \
+	     --disable-debug \
+	     $(config_tests) \
+	     --disable-sparkle \
+	     --disable-builddocs \
+	     --disable-install-libxf86config \
+	     --disable-aiglx \
+	     --disable-glx-tls \
+	     --enable-registry \
+	     --enable-gesture \
+	     --enable-composite \
+	     --enable-shm \
+	     --enable-xres \
+	     --enable-record \
+	     --enable-xv \
+	     --enable-xvmc \
+	     --disable-dga \
+	     --disable-screensaver \
+	     --enable-xdmcp \
+	     --enable-xdm-auth-1 \
+	     --disable-glx \
+	     $(dri) \
+	     --enable-xinerama \
+	     --enable-xf86vidmode \
+	     --enable-xace \
+	     $(selinux) \
+	     --disable-xcsecurity \
+	     --disable-xcalibrate \
+	     --disable-tslib \
+	     --disable-dbe \
+	     --disable-xf86bigfont \
+	     --enable-dpms \
+	     $(config_backend) \
+	     --enable-xfree86-utils \
+	     --disable-xaa \
+	     --disable-vgahw \
+	     --disable-vbe \
+	     --with-int10=x86emu \
+	     --disable-windowswm \
+	     --enable-libdrm \
+	     --enable-xorg \
+	     --disable-dmx \
+	     --disable-xvfb \
+	     --disable-xnest \
+	     --disable-xquartz \
+	     --disable-xwin \
+	     --disable-kdrive \
+	     --disable-xephyr \
+	     --disable-xfake \
+	     $(build_xfbdev) \
+	     --disable-kdrive-kbd \
+	     --disable-kdrive-mouse \
+	     --disable-kdrive-evdev \
+	     --disable-doc \
+	     --disable-devel-doc \
+	     --without-dtrace \
+	     --with-extra-module-dir="/usr/lib/xorg/extra-modules" \
+	     --with-os-vendor="$(VENDOR)" \
+	     --with-builderstring="$(SOURCE_NAME) $(SOURCE_VERSION) ($(BUILDER))" \
+	     --with-xkb-path=/opt/etc/X11/xkb \
+	     --with-xkb-output=/opt/etc/X11/xkb \
+	     --with-default-font-path="built-ins" \
+	     --disable-install-setuid \
+	     --with-sha1=libgcrypt \
+	     --enable-gestures
+
+#configure: $(STAMP_DIR)/patch
+configure:
+	dh_testdir
+	autoreconf -vfi
+
+obj-$(DEB_BUILD_GNU_TYPE)/config.status: configure
+	dh_testdir
+	mkdir -p obj-$(DEB_BUILD_GNU_TYPE)
+	cd obj-$(DEB_BUILD_GNU_TYPE) && \
+	../configure \
+	  --prefix=/usr \
+	  --mandir=\$${prefix}/share/man \
+	  --infodir=\$${prefix}/share/info \
+	  --sysconfdir=/etc \
+	  --localstatedir=/var \
+	  $(confflags) \
+	  CFLAGS="$(CFLAGS)" \
+	  CPPFLAGS="$(CPPFLAGS)"
+
+build: build-stamp
+build-stamp: obj-$(DEB_BUILD_GNU_TYPE)/config.status
+	dh_testdir
+	cd obj-$(DEB_BUILD_GNU_TYPE) && $(MAKE)
+	>$@
+
+clean: xsfclean
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+
+	rm -f config.cache config.log config.status
+	rm -f */config.cache */config.log */config.status
+	rm -f conftest* */conftest*
+	rm -rf autom4te.cache */autom4te.cache
+	rm -rf obj-*
+	# generated file, left over in the upstream tarball
+	# see https://bugs.freedesktop.org/show_bug.cgi?id=9277
+	rm -f hw/xfree86/common/xf86Build.h
+	# more generated files
+	rm -f include/dix-config.h include/do-not-use-config.h \
+		include/xorg-config.h include/xorg-server.h
+	#rm -f compile config.guess config.sub depcomp install-sh
+	rm -f compile config.guess config.sub configure depcomp install-sh
+	rm -f missing INSTALL aclocal.m4 ylwrap
+	#rm -f ltmain.sh missing INSTALL aclocal.m4 ylwrap
+	rm -f ltmain.sh
+	rm -f include/do-not-use-config.h.in
+	rm -f m4/lt*.m4 m4/libtool.m4
+	find -name Makefile.in -exec rm -f {} \;
+	#find -name Makefile.in -delete
+
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	cd obj-$(DEB_BUILD_GNU_TYPE) && $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install
+
+	# oh, yuck.
+	find $(CURDIR)/debian/tmp/usr/lib/xorg -type f -name '*.la' | \
+	  xargs rm -f
+
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/multimedia/*
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/libvbe.so
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/libvgahw.so
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/libwfb.so
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/libxaa.so
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/libwfb.so
+	rm -f $(CURDIR)/debian/tmp/usr/lib/xorg/modules/libxf8_16bpp.so
+
+#	install -m 755 debian/local/xvfb-run debian/tmp/main/usr/bin
+#	install debian/local/xvfb-run.1 debian/tmp/main/usr/share/man/man1
+ifneq ($(DEB_HOST_ARCH_OS), linux)
+	install -d debian/tmp/main/usr/share/X11/xorg.conf.d
+	install -m 644 debian/local/10-*.conf debian/tmp/main/usr/share/X11/xorg.conf.d
+#ifeq ($(udeb), yes)
+#	install -d debian/tmp/udeb/usr/share/X11/xorg.conf.d
+#	install -m 644 debian/local/10-*.conf debian/tmp/udeb/usr/share/X11/xorg.conf.d
+#endif
+endif
+
+# stub to start building deb files, used by binary-indep and binary-arch
+binary-initial:
+	dh_testdir
+	dh_testroot
+
+# stub to build deb files, used by binary-indep and binary-arch
+binary-deb:
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+serverminver = $(shell cat debian/serverminver)
+
+# Build architecture-dependent files here.
+binary-arch: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-initial
+
+	dh_installdocs -s
+	dh_installchangelogs -s ChangeLog
+	dh_install -s --sourcedir=debian/tmp --list-missing
+	$(INSTALL) -d $(CURDIR)/debian/xserver-xorg-dev/usr/share/xserver-xorg
+	# XXX might want to only extract the major ABI versions?
+	#abi_videodrv=`PKG_CONFIG_PATH=debian/tmp/main/usr/lib/pkgconfig pkg-config --variable=abi_videodrv xorg-server`; \
+	#echo videoabi=xorg-video-abi-$$abi_videodrv > debian/xserver-xorg-core.substvars && \
+	#echo "xorg-video-abi-$$abi_videodrv, xserver-xorg-core (>= $(serverminver))" > debian/xserver-xorg-dev/usr/share/xserver-xorg/videodrvdep
+	#abi_xinput=`PKG_CONFIG_PATH=debian/tmp/main/usr/lib/pkgconfig pkg-config --variable=abi_xinput xorg-server`; \
+	#echo inputabi=xorg-input-abi-$$abi_xinput >> debian/xserver-xorg-core.substvars && \
+	#echo "xorg-input-abi-$$abi_xinput, xserver-xorg-core (>= $(serverminver))" > debian/xserver-xorg-dev/usr/share/xserver-xorg/xinputdep
+
+	$(INSTALL) -m644 $(CURDIR)/debian/videoabiver \
+	           $(CURDIR)/debian/xserver-xorg-dev/usr/share/xserver-xorg/videoabiver
+	$(INSTALL) -m644 $(CURDIR)/debian/inputabiver \
+	           $(CURDIR)/debian/xserver-xorg-dev/usr/share/xserver-xorg/inputabiver
+	$(INSTALL) -m644 $(CURDIR)/debian/serverminver \
+	           $(CURDIR)/debian/xserver-xorg-dev/usr/share/xserver-xorg/serverminver
+	$(INSTALL) -m 755 -d debian/xserver-xorg-core/usr/share/bug/xserver-xorg-core
+	$(INSTALL) -m 755 debian/xserver-xorg-core.bug.script debian/xserver-xorg-core/usr/share/bug/xserver-xorg-core/script
+	install -d debian/xserver-xorg-core/lib/udev/rules.d
+	install -m 644 debian/local/64-xorg-xkb.rules debian/xserver-xorg-core/lib/udev/rules.d
+#ifeq ($(udeb), yes)
+#	install -d debian/xserver-xorg-core-udeb/lib/udev/rules.d
+#	install -m 644 debian/local/64-xorg-xkb.rules debian/xserver-xorg-core-udeb/lib/udev/rules.d
+#endif
+	dh_installdebconf -s
+#	dh_installman -s
+	dh_link -s
+	dh_strip -pxserver-xorg-core --dbg-package=xserver-xorg-core-dbg
+	dh_strip -s
+	#dh_strip -s --remaining-packages
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-deb
+
+
+# Build architecture-independent files here
+binary-indep: build install
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-initial
+	dh_install -i --sourcedir=debian/tmp
+#	dh_installdocs -i
+#	dh_installchangelogs -i
+
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-deb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install
