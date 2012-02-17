@@ -1716,8 +1716,10 @@ xf86XVPutImage(
   int ret = Success;
   Bool clippedAway = FALSE;
 
+#ifndef _F_PUT_ON_PIXMAP_
   if (pDraw->type != DRAWABLE_WINDOW)
       return BadAlloc;
+#endif
 
   if(!portPriv->pScrn->vtSema) return Success; /* Success ? */
 
@@ -1744,6 +1746,10 @@ xf86XVPutImage(
      RegionUninit(&VPReg);
   }
 
+#ifdef _F_PUT_ON_PIXMAP_
+  if (pDraw->type == DRAWABLE_WINDOW)
+  {
+#endif
   /* If we are changing windows, unregister our port in the old window */
   if(portPriv->pDraw && (portPriv->pDraw != pDraw))
      xf86XVRemovePortFromWindow((WindowPtr)(portPriv->pDraw), portPriv);
@@ -1751,6 +1757,9 @@ xf86XVPutImage(
   /* Register our port with the new window */
   ret =  xf86XVEnlistPortInWindow((WindowPtr)pDraw, portPriv);
   if(ret != Success) goto PUT_IMAGE_BAILOUT;
+#ifdef _F_PUT_ON_PIXMAP_
+  }
+#endif
 
   if(!RegionNotEmpty(&ClipRegion)) {
      clippedAway = TRUE;

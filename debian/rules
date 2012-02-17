@@ -47,6 +47,8 @@ CFLAGS += -D_F_NO_GRABTIME_UPDATE_
 CFLAGS += -D_F_COMP_OVL_PATCH
 # enable gesture support
 CFLAGS += -D_F_GESTURE_EXTENSION_
+# put video on pixman
+CFLAGS += -D_F_PUT_ON_PIXMAP_
 ###########################################################################################
 
 DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
