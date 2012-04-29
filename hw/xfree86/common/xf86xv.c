@@ -1571,8 +1571,10 @@ xf86XVGetStill(
   int ret = Success;
   Bool clippedAway = FALSE;
 
+#ifndef _F_PUT_ON_PIXMAP_
   if (pDraw->type != DRAWABLE_WINDOW)
       return BadAlloc;
+#endif
 
   if(!portPriv->pScrn->vtSema) return Success; /* Success ? */
 

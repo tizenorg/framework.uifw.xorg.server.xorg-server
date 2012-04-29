@@ -1,13 +1,13 @@
-
-Name:       xorg-x11-server
+#sbs-git:slp/pkgs/xorg/server/xorg-server xorg-server 1.9.3 c6fa517cfcb450647614f9214de654870513e6ff
+Name:	xorg-server
 Summary:    X.Org X11 X server
-Version:    1.9.3
-Release:    13
+Version: 1.9.3
+Release:    19
 #ExclusiveArch:  %arm
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
-Source0:    xorg-server-%{version}.tar.gz
+Source0:    %{name}-%{version}.tar.gz
 Source100:  10-kbd.conf
 Source101:  10-mouse.conf
 Source102:  64-xorg-xkb.rules
@@ -15,7 +15,7 @@ Source200:  videoabiver
 Source201:  inputabiver
 Source202:  serverminver
 Source203:  xserver-xorg-core.bug.script
-Requires:   libdrm >= 2.4.0
+Requires:   libdrm2 >= 2.4.0
 BuildRequires:  pkgconfig(xorg-macros)
 BuildRequires:  pkgconfig(fontutil)
 BuildRequires:  pkgconfig(xtrans)
@@ -39,6 +39,7 @@ BuildRequires:  pkgconfig(inputproto)
 BuildRequires:  pkgconfig(fontsproto)
 BuildRequires:  pkgconfig(videoproto)
 BuildRequires:  pkgconfig(xf86vidmodeproto)
+BuildRequires:  pkgconfig(gestureproto)
 BuildRequires:  pkgconfig(xdmcp)
 BuildRequires:  pkgconfig(xfont)
 BuildRequires:  pkgconfig(xkbfile)
@@ -50,52 +51,53 @@ BuildRequires:  pkgconfig(pciaccess)
 BuildRequires:  libgcrypt-devel
 
 
-
 %description
 Description: %{summary}
 
 
-
-%package devel
+%package -n xserver-xorg-devel
 Summary:    SDK for X server driver module development
 Group:      System/X11
 Requires:   %{name} = %{version}-%{release}
-Requires:   xorg-x11-util-macros
-Requires:   pkgconfig
 Requires:   pixman-devel
 Requires:   libpciaccess-devel
 
-%description devel
+%description -n xserver-xorg-devel
 The SDK package provides the developmental files which are necessary for
 developing X server driver modules, and for compiling driver modules
 outside of the standard X11 source code tree.  Developers writing video
 drivers, input drivers, or other X modules should install this package.
 
 
-%package common
+%package -n xserver-common
 Summary:    Xorg server common files
 Group:      System/X11
 Requires:   %{name} = %{version}-%{release}
 
-%description common
+%description -n xserver-common
 Common files shared among all X servers.
 
-%package core
+%package -n xserver-xorg-core
 Summary:    Xorg X server
 Group:      System/X11
-Requires:   %{name} = %{version}-%{release}
-Requires:   xorg-x11-server-common >= %{version}-%{release}
+Requires:   xserver-common = %{version}-%{release}
 
-%description core
+%description -n xserver-xorg-core
 X.org X11 is an open source implementation of the X Window System.  It
 provides the basic low level functionality which full fledged
 graphical user interfaces (GUIs) such as GNOME and KDE are designed
 upon.
 
+%package -n xserver-xorg-tools
+Summary:    Xorg X server
+Group:      System/X11
+Requires:   xserver-common = %{version}-%{release}
 
+%description -n xserver-xorg-tools
+xserver-xorg-tools
 
 %prep
-%setup -q -n xorg-server-%{version}
+%setup -q
 
 
 
@@ -112,6 +114,7 @@ upon.
 	--disable-aiglx \
 	--disable-glx-tls \
 	--enable-registry \
+	--enable-gesture \
 	--enable-composite \
 	--enable-shm \
 	--enable-xres \
@@ -178,8 +181,8 @@ upon.
 		-D_F_CHECK_NULL_CLIENT_ \
 		-D_F_DYNAMIC_MIEQ_ \
 		-D_F_NO_GRABTIME_UPDATE_ \
-		-D_F_DRI2_INVALIDATE_ \
-		-D_F_DRI2_CW_PATCH \
+		-D_F_COMP_OVL_PATCH \
+		-D_F_GESTURE_EXTENSION_ \
  		" \
 	CPPFLAGS=""
 
@@ -220,7 +223,7 @@ rm -f %{buildroot}/opt/etc/X11/xkb/README.compiled
 # this section/file is intentionally left blank
 
 
-%files devel
+%files -n xserver-xorg-devel
 %defattr(-,root,root,-)
 %{_libdir}/pkgconfig/xorg-server.pc
 %dir %{_includedir}/xorg
@@ -228,11 +231,14 @@ rm -f %{buildroot}/opt/etc/X11/xkb/README.compiled
 %{_datadir}/aclocal/xorg-server.m4
 %{_datadir}/X11/xorg.conf.d/10-evdev.conf
 
-%files common
+%files -n xserver-common
 %defattr(-,root,root,-)
 %{_libdir}/xorg/protocol.txt
 
-%files core
+%files -n xserver-xorg-tools
+%defattr(-,root,root,-)
+
+%files -n xserver-xorg-core
 %defattr(-,root,root,-)
 %{_bindir}/X
 %{_bindir}/Xorg
