@@ -15,6 +15,7 @@ Source200:  videoabiver
 Source201:  inputabiver
 Source202:  serverminver
 Source203:  xserver-xorg-core.bug.script
+Source1001: packaging/xorg-server.manifest 
 Requires:   libdrm2 >= 2.4.0
 BuildRequires:  pkgconfig(xorg-macros)
 BuildRequires:  pkgconfig(fontutil)
@@ -102,6 +103,7 @@ xserver-xorg-tools
 
 
 %build
+cp %{SOURCE1001} .
 
 %reconfigure \
 	--disable-strict-compilation \
@@ -219,11 +221,13 @@ rm -f %{buildroot}/opt/etc/X11/xkb/README.compiled
 %remove_docs
 
 %files
+%manifest xorg-server.manifest
 %defattr(-,root,root,-)
 # this section/file is intentionally left blank
 
 
 %files -n xserver-xorg-devel
+%manifest xorg-server.manifest
 %defattr(-,root,root,-)
 %{_libdir}/pkgconfig/xorg-server.pc
 %dir %{_includedir}/xorg
@@ -232,13 +236,16 @@ rm -f %{buildroot}/opt/etc/X11/xkb/README.compiled
 %{_datadir}/X11/xorg.conf.d/10-evdev.conf
 
 %files -n xserver-common
+%manifest xorg-server.manifest
 %defattr(-,root,root,-)
 %{_libdir}/xorg/protocol.txt
 
 %files -n xserver-xorg-tools
+%manifest xorg-server.manifest
 %defattr(-,root,root,-)
 
 %files -n xserver-xorg-core
+%manifest xorg-server.manifest
 %defattr(-,root,root,-)
 %{_bindir}/X
 %{_bindir}/Xorg
