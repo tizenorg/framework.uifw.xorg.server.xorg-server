@@ -17,6 +17,12 @@ Source202:  serverminver
 Source203:  xserver-xorg-core.bug.script
 Source1001: packaging/xorg-server.manifest 
 Requires:   libdrm2 >= 2.4.0
+%ifarch %ix86
+BuildRequires:  pkgconfig(glproto) 
+BuildRequires:  pkgconfig(gl) 
+BuildRequires:  pkgconfig(dri) 
+BuildRequires:  pkgconfig(xf86driproto)
+%endif
 BuildRequires:  pkgconfig(xorg-macros)
 BuildRequires:  pkgconfig(fontutil)
 BuildRequires:  pkgconfig(xtrans)
@@ -113,8 +119,6 @@ cp %{SOURCE1001} .
 	--disable-sparkle \
 	--disable-builddocs \
 	--disable-install-libxf86config \
-	--disable-aiglx \
-	--disable-glx-tls \
 	--enable-registry \
 	--enable-gesture \
 	--enable-composite \
@@ -127,8 +131,17 @@ cp %{SOURCE1001} .
 	--disable-screensaver \
 	--enable-xdmcp \
 	--enable-xdm-auth-1 \
+%ifnarch %ix86
+	--disable-aiglx \
+	--disable-glx-tls \
 	--disable-glx \
-	--disable-dri --enable-dri2 \
+	--disable-vgahw \
+	--disable-dbe \
+	--disable-xaa \
+	--disable-vbe \
+	--disable-dri \
+%endif
+	--enable-dri2 \
 	--enable-xinerama \
 	--enable-xf86vidmode \
 	--enable-xace \
@@ -136,16 +149,12 @@ cp %{SOURCE1001} .
 	--disable-xcsecurity \
 	--disable-xcalibrate \
 	--disable-tslib \
-	--disable-dbe \
 	--disable-xf86bigfont \
 	--enable-dpms \
 	--disable-config-dbus \
 	--enable-config-udev \
 	--disable-config-hal \
 	--enable-xfree86-utils \
-	--disable-xaa \
-	--disable-vgahw \
-	--disable-vbe \
 	--with-int10=x86emu \
 	--disable-windowswm \
 	--enable-libdrm \
@@ -166,7 +175,7 @@ cp %{SOURCE1001} .
 	--disable-devel-doc \
 	--without-dtrace \
 	--with-extra-module-dir="/usr/lib/xorg/extra-modules" \
-	--with-os-vendor="SLP(Samsung Linux Platform)" \
+	--with-os-vendor="Tizen" \
 	--with-xkb-path=/opt/etc/X11/xkb \
 	--with-xkb-output=/opt/etc/X11/xkb \
 	--with-default-font-path="built-ins" \
@@ -255,6 +264,11 @@ rm -f %{buildroot}/opt/etc/X11/xkb/README.compiled
 %dir %{_libdir}/xorg/modules
 %dir %{_libdir}/xorg/modules/extensions
 %{_libdir}/xorg/modules/extensions/libdri2.so
+%ifarch %ix86
+/usr/lib/xorg/modules/extensions/libglx.so
+/usr/lib/xorg/modules/extensions/libdbe.so
+/usr/lib/xorg/modules/extensions/libdri.so
+%endif
 %{_libdir}/xorg/modules/extensions/libextmod.so
 %{_libdir}/xorg/modules/extensions/librecord.so
 %dir %{_libdir}/xorg/modules/multimedia
