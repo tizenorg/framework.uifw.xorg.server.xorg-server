@@ -1,0 +1,2 @@
+* Fri Jun 01 2012 Peng Li <peng.li@intel.com> - 1.9.3
+- packaging: enable build options for IA device in spec file
