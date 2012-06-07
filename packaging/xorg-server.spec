@@ -3,7 +3,6 @@ Name:	xorg-server
 Summary:    X.Org X11 X server
 Version: 1.9.3
 Release:    19
-#ExclusiveArch:  %arm
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
@@ -15,8 +14,8 @@ Source200:  videoabiver
 Source201:  inputabiver
 Source202:  serverminver
 Source203:  xserver-xorg-core.bug.script
-Source1001: packaging/xorg-server.manifest 
-Requires:   libdrm2 >= 2.4.0
+Source1001: xorg-server.manifest 
+Requires:   libdrm >= 2.4.0
 %ifarch %ix86
 BuildRequires:  pkgconfig(glproto) 
 BuildRequires:  pkgconfig(gl) 

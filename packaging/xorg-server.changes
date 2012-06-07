@@ -1,2 +1,21 @@
-* Fri Jun 01 2012 Peng Li <peng.li@intel.com> - 1.9.3
+* Thu Jun 07 2012 Anas Nashif <anas.nashif@intel.com> d0a7cc6
+- Do not require libdrm2, instead look for libdrm
+
+* Fri Jun 01 2012 Li Peng <peng.li@intel.com> 281e3fb
+- add changelog entry
 - packaging: enable build options for IA device in spec file
+
+* Wed May 30 2012 Ryan Ware <ryan.r.ware@intel.com> ad64732
+- Add default Smack manifest for xorg-server.spec
+
+* Sun Apr 29 2012 Kim Kibum <kb0929.kim@samsung.com> d1c1e7e
+- upload tizen1.0 source
+
+* Fri Feb 17 2012 Boram Park <boram1288.park@samsung.com> 0ffc9fc
+- Add additional diff
+
+* Fri Jan 06 2012 Kibum Kim <kb0929.kim@samsung.com> 60423af
+- Git init
+[ Eunkyoung Kim ]
+- Initial empty repository
+
