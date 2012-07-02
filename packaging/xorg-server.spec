@@ -175,8 +175,8 @@ cp %{SOURCE1001} .
 	--without-dtrace \
 	--with-extra-module-dir="/usr/lib/xorg/extra-modules" \
 	--with-os-vendor="Tizen" \
-	--with-xkb-path=/opt/etc/X11/xkb \
-	--with-xkb-output=/opt/etc/X11/xkb \
+	--with-xkb-path=/etc/X11/xkb \
+	--with-xkb-output=/etc/X11/xkb \
 	--with-default-font-path="built-ins" \
 	--disable-install-setuid \
 	--with-sha1=libgcrypt \
@@ -209,7 +209,7 @@ rm -f %{buildroot}/usr/lib/xorg/modules/libwfb.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libxaa.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libwfb.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libxf8_16bpp.so
-rm -f %{buildroot}/opt/etc/X11/xkb/README.compiled
+rm -f %{buildroot}/etc/X11/xkb/README.compiled
 
 #mkdir -p %{buildroot}/usr/share/X11/xorg.conf.d
 #cp -a %{SOURCE100} %{buildroot}/usr/share/X11/xorg.conf.d
