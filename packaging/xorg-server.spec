@@ -256,7 +256,7 @@ rm -f %{buildroot}/etc/X11/xkb/README.compiled
 %manifest xorg-server.manifest
 %defattr(-,root,root,-)
 %{_bindir}/X
-%{_bindir}/Xorg
+%attr(4755,-,-) %{_bindir}/Xorg
 %{_bindir}/gtf
 %{_bindir}/cvt
 %dir %{_libdir}/xorg

@@ -1,3 +1,6 @@
+* Fri Jul 06 2012 Brad Peters <brad.t.peters@intel.com>
+- Add setuid for /usr/bin/Xorg
+
 * Mon Jul 02 2012 William Douglas <william.douglas@intel.com> 1038d02
 - use /etc not /opt/etc
 
