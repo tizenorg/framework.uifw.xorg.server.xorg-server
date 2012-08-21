@@ -1,3 +1,29 @@
+xorg-server (2:1.9.3-25slp2) unstable; urgency=low
+
+  * Fix xkb patch in packaging/xorg-server.spec file
+    - Change --with-xkb-path from /opt/etc/X11/xkb to /usr/etc/X11/xkb
+    - Change --with-xkb-output from /opt/etc/X11/xkb to /usr/etc/X11/xkb
+  * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
+  * Tag: xorg-server_1.9.3-25slp2
+
+ -- Sung-Jin Park <sj76.park@samsung.com>  Mon, 18 Jun 2012 10:42:28 +0900
+
+xorg-server (2:1.9.3-24slp2) unstable; urgency=low
+
+  * get still on pixmap
+  * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
+  * Tag: xorg-server_1.9.3-24slp2
+
+ -- Boram Park <boram1288.park@samsung.com>  Wed, 07 Mar 2012 21:25:28 +0900
+
+xorg-server (2:1.9.3-23slp2) unstable; urgency=low
+
+  * Change the value of --with-xkb-path and --with-xkb-output from /opt/etc/X11/xkb to /usr/etc/X11/xkb
+  * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
+  * Tag: xorg-server_1.9.3-23slp2
+
+ -- Sung-Jin Park <sj76.park@samsung.com>  Wed, 07 Mar 2012 16:40:08 +0900
+
 xorg-server (2:1.9.3-22slp2) unstable; urgency=low
 
   * fix error of applying patch
@@ -33,8 +59,8 @@ xorg-server (2:1.9.3-19slp2) unstable; urgency=low
 
 xorg-server (2:1.9.3-18slp2) unstable; urgency=low
 
-  * remove slp patches related to dri2 
-  * update the patches related to dri2 
+  * remove slp patches related to dri2
+  * update the patches related to dri2
   * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
   * Tag: xorg-server_1.9.3-18slp2
 
@@ -42,7 +68,7 @@ xorg-server (2:1.9.3-18slp2) unstable; urgency=low
 
 xorg-server (2:1.9.3-17slp2) unstable; urgency=low
 
-  * add feature to support hw overlay 
+  * add feature to support hw overlay
   * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
   * Tag: xorg-server_1.9.3-17slp2
 
@@ -58,7 +84,7 @@ xorg-server (2:1.9.3-16slp2) unstable; urgency=low
 
 xorg-server (2:1.9.3-15slp2) unstable; urgency=low
 
-  * Upload again due to version redundency 
+  * Upload again due to version redundency
   * Remove /hw/dmx/config/parser.c, /hw/dmx/config/parser.h, hw/xwin/winprefsyacc.c, hw/xwin/winprefsyacc.h
     which will be made during build time
   * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
@@ -85,7 +111,7 @@ xorg-server (2:1.9.3-13slp2) unstable; urgency=low
 
 xorg-server (2:1.9.3-12slp2) unstable; urgency=low
 
-  * remove features not to use any more 
+  * remove features not to use any more
   * Git: 165.213.180.234:slp/pkgs/xorg/server/xorg-server
   * Tag: xorg-server_1.9.3-12slp2
 

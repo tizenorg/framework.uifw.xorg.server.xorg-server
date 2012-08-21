@@ -177,8 +177,8 @@ confflags += \
 	     --with-extra-module-dir="/usr/lib/xorg/extra-modules" \
 	     --with-os-vendor="$(VENDOR)" \
 	     --with-builderstring="$(SOURCE_NAME) $(SOURCE_VERSION) ($(BUILDER))" \
-	     --with-xkb-path=/opt/etc/X11/xkb \
-	     --with-xkb-output=/opt/etc/X11/xkb \
+	     --with-xkb-path=/usr/etc/X11/xkb \
+	     --with-xkb-output=/usr/etc/X11/xkb \
 	     --with-default-font-path="built-ins" \
 	     --disable-install-setuid \
 	     --with-sha1=libgcrypt \

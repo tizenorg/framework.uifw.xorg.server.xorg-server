@@ -1,6 +1,6 @@
 /**************************************************************************
 
-xorg-server/gesture/gesture.c
+gesture/gesture.c
 
 Copyright (c) 2011 Samsung Electronics Co., Ltd All Rights Reserved
 
@@ -130,8 +130,8 @@ Bool GestureSetMaxNumberOfFingers(int num_finger)
 {
 	int i;
 
-	if( !grabbed_events )
-		return FALSE;
+//	if( !grabbed_events )
+//		return FALSE;
 
 	max_num_finger = num_finger + 1;
 #ifdef __DEBUG_GESTURE_EXT__
@@ -156,8 +156,8 @@ Bool GestureUnsetMaxNumberOfFingers(void)
 {
 	int i;
 
-	if( !grabbed_events )
-		return FALSE;
+//	if( !grabbed_events )
+//		return FALSE;
 
 	for( i = 0 ;  i < GestureNumberEvents ;  i++ )
 	{
@@ -559,11 +559,11 @@ ProcGestureQueryVersion(register ClientPtr client)
     rep.patchVersion = SERVER_GESTURE_PATCH_VERSION;
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
-	 swaps(&rep.majorVersion, n);
-	 swaps(&rep.minorVersion, n);
-	 swapl(&rep.patchVersion, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
+	 swaps(&rep.majorVersion);
+	 swaps(&rep.minorVersion);
+	 swapl(&rep.patchVersion);
     }
     WriteToClient(client, sizeof(xGestureQueryVersionReply), (char *)&rep);
 
@@ -579,7 +579,7 @@ SProcGestureQueryVersion(register ClientPtr  client)
 {
     register int n;
     REQUEST(xGestureQueryVersionReq);
-    swaps(&stuff->length, n);
+    swaps(&stuff->length);
     return ProcGestureQueryVersion(client);
 }
 
@@ -588,9 +588,9 @@ SProcGestureSelectEvents(register ClientPtr client)
 {
     register int n;
     REQUEST(xGestureSelectEventsReq);
-    swaps(&stuff->length, n);
-    swapl(&stuff->window, n);
-    swapl(&stuff->mask, n);
+    swaps(&stuff->length);
+    swapl(&stuff->window);
+    swapl(&stuff->mask);
     return ProcGestureSelectEvents(client);
 }
 
@@ -673,8 +673,8 @@ SProcGestureGetSelectedEvents(register ClientPtr client)
 {
     register int n;
     REQUEST(xGestureGetSelectedEventsReq);
-    swaps(&stuff->length, n);
-    swapl(&stuff->window, n);
+    swaps(&stuff->length);
+    swapl(&stuff->window);
     return ProcGestureGetSelectedEvents(client);
 }
 
@@ -727,9 +727,9 @@ ProcGestureGetSelectedEvents (register ClientPtr client)
     rep.mask = mask_out;
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
-	 swapl(&rep.mask, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
+	 swapl(&rep.mask);
     }
     WriteToClient(client, sizeof(xGestureGetSelectedEventsReply), (char *)&rep);
 
@@ -744,9 +744,9 @@ failed:
     rep.mask = 0;
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
-	 swapl(&rep.mask, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
+	 swapl(&rep.mask);
     }
     WriteToClient(client, sizeof(xGestureGetSelectedEventsReply), (char *)&rep);
 
@@ -762,11 +762,11 @@ SProcGestureGrabEvent(register ClientPtr client)
 {
     register int n;
     REQUEST(xGestureGrabEventReq);
-    swaps(&stuff->length, n);
-    swapl(&stuff->window, n);
-    swapl(&stuff->eventType, n);
-    swapl(&stuff->num_finger, n);
-    swapl(&stuff->time, n);
+    swaps(&stuff->length);
+    swapl(&stuff->window);
+    swapl(&stuff->eventType);
+    //swapl(&stuff->num_finger);
+    swapl(&stuff->time);
     return ProcGestureGrabEvent(client);
 }
 
@@ -874,8 +874,8 @@ ProcGestureGrabEvent (register ClientPtr client)
 
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
     }
     WriteToClient(client, sizeof(xGestureGrabEventReply), (char *)&rep);
 
@@ -889,8 +889,8 @@ grab_failed:
 
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
     }
 
     WriteToClient(client, sizeof(xGestureGrabEventReply), (char *)&rep);
@@ -907,11 +907,11 @@ SProcGestureUngrabEvent(register ClientPtr client)
 {
     register int n;
     REQUEST(xGestureUngrabEventReq);
-    swaps(&stuff->length, n);
-    swapl(&stuff->window, n);
-    swapl(&stuff->eventType, n);
-    swapl(&stuff->num_finger, n);
-    swapl(&stuff->time, n);
+    swaps(&stuff->length);
+    swapl(&stuff->window);
+    swapl(&stuff->eventType);
+    //swapl(&stuff->num_finger);
+    swapl(&stuff->time);
     return ProcGestureUngrabEvent(client);
 }
 
@@ -1032,8 +1032,8 @@ ProcGestureUngrabEvent (register ClientPtr client)
 
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
     }
     WriteToClient(client, sizeof(xGestureUngrabEventReply), (char *)&rep);
 
@@ -1047,8 +1047,8 @@ ungrab_failed:
 
     if (client->swapped)
     {
-        swaps(&rep.sequenceNumber, n);
-        swapl(&rep.length, n);
+        swaps(&rep.sequenceNumber);
+        swapl(&rep.length);
     }
     WriteToClient(client, sizeof(xGestureUngrabEventReply), (char *)&rep);
 

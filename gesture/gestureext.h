@@ -1,6 +1,6 @@
 /**************************************************************************
 
-xorg-server/gesture/gestureext.h 
+gesture/gestureext.h
 
 Copyright (c) 2011 Samsung Electronics Co., Ltd All Rights Reserved
 
