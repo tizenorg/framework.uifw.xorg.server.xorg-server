@@ -95,8 +95,7 @@ typedef struct _ScreenSaverStuff {
  *  or as a local variable) can easily do so and retain full type checking.
  */
 
-typedef Bool (*CloseScreenProcPtr) (int /*index */ ,
-                                    ScreenPtr /*pScreen */ );
+typedef Bool (*CloseScreenProcPtr) (ScreenPtr /*pScreen */ );
 
 typedef void (*QueryBestSizeProcPtr) (int /*class */ ,
                                       unsigned short * /*pwidth */ ,
@@ -180,8 +179,10 @@ typedef void (*ClipNotifyProcPtr) (WindowPtr /*pWindow */ ,
 #define CREATE_PIXMAP_USAGE_BACKING_PIXMAP              2
 /* pixmap will contain a glyph */
 #define CREATE_PIXMAP_USAGE_GLYPH_PICTURE               3
+/* pixmap will be shared */
+#define CREATE_PIXMAP_USAGE_SHARED                      4
 /* _F_COMP_OVL_PATCH : pixmap will be the hw overlay pixmap */
-#define CREATE_PIXMAP_USAGE_OVERLAY			            4
+#define CREATE_PIXMAP_USAGE_OVERLAY			            5
 
 typedef PixmapPtr (*CreatePixmapProcPtr) (ScreenPtr /*pScreen */ ,
                                           int /*width */ ,
@@ -260,13 +261,11 @@ typedef void (*SendGraphicsExposeProcPtr) (ClientPtr /*client */ ,
                                            int /*major */ ,
                                            int /*minor */ );
 
-typedef void (*ScreenBlockHandlerProcPtr) (int /*screenNum */ ,
-                                           pointer /*blockData */ ,
+typedef void (*ScreenBlockHandlerProcPtr) (ScreenPtr /*pScreen*/ ,
                                            pointer /*pTimeout */ ,
                                            pointer /*pReadmask */ );
 
-typedef void (*ScreenWakeupHandlerProcPtr) (int /*screenNum */ ,
-                                            pointer /*wakeupData */ ,
+typedef void (*ScreenWakeupHandlerProcPtr) (ScreenPtr /*pScreen*/ ,
                                             unsigned long /*result */ ,
                                             pointer /*pReadMask */ );
 
@@ -344,6 +343,18 @@ typedef void (*DeviceCursorCleanupProcPtr) (DeviceIntPtr /* pDev */ ,
 typedef void (*ConstrainCursorHarderProcPtr) (DeviceIntPtr, ScreenPtr, int,
                                               int *, int *);
 
+
+typedef Bool (*SharePixmapBackingProcPtr)(PixmapPtr, ScreenPtr, void **);
+
+typedef Bool (*SetSharedPixmapBackingProcPtr)(PixmapPtr, void *);
+
+typedef Bool (*StartPixmapTrackingProcPtr)(PixmapPtr, PixmapPtr,
+                                           int x, int y);
+
+typedef Bool (*StopPixmapTrackingProcPtr)(PixmapPtr, PixmapPtr);
+
+typedef Bool (*ReplaceScanoutPixmapProcPtr)(DrawablePtr, PixmapPtr, Bool);
+
 typedef struct _Screen {
     int myNum;                  /* index of this instance in Screens[] */
     ATOM id;
@@ -371,6 +382,8 @@ typedef struct _Screen {
     VisualPtr visuals;
     WindowPtr root;
     ScreenSaverStuffRec screensaver;
+
+    DevPrivateSetRec    screenSpecificPrivates[PRIVATE_LAST];
 
     /* Random screen procedures */
 
@@ -442,9 +455,6 @@ typedef struct _Screen {
     ScreenBlockHandlerProcPtr BlockHandler;
     ScreenWakeupHandlerProcPtr WakeupHandler;
 
-    pointer blockData;
-    pointer wakeupData;
-
     /* anybody can get a piece of this array */
     PrivateRec *devPrivates;
 
@@ -483,6 +493,28 @@ typedef struct _Screen {
      * malicious users to steal framebuffer's content if that would be the
      * default */
     Bool canDoBGNoneRoot;
+
+    Bool isGPU;
+
+    struct xorg_list unattached_list;
+    struct xorg_list unattached_head;
+
+    ScreenPtr current_master;
+
+    struct xorg_list output_slave_list;
+    struct xorg_list output_head;
+
+    SharePixmapBackingProcPtr SharePixmapBacking;
+    SetSharedPixmapBackingProcPtr SetSharedPixmapBacking;
+
+    StartPixmapTrackingProcPtr StartPixmapTracking;
+    StopPixmapTrackingProcPtr StopPixmapTracking;
+
+    struct xorg_list pixmap_dirty_list;
+    struct xorg_list offload_slave_list;
+    struct xorg_list offload_head;
+
+    ReplaceScanoutPixmapProcPtr ReplaceScanoutPixmap;
 } ScreenRec;
 
 static inline RegionPtr
@@ -500,6 +532,8 @@ typedef struct _ScreenInfo {
      PixmapFormatRec formats[MAXFORMATS];
     int numScreens;
     ScreenPtr screens[MAXSCREENS];
+    int numGPUScreens;
+    ScreenPtr gpuscreens[MAXGPUSCREENS];
     int x;                      /* origin */
     int y;                      /* origin */
     int width;                  /* total width of all screens together */

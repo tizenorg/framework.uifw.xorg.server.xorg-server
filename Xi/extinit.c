@@ -49,8 +49,6 @@ SOFTWARE.
  *  Dispatch routines and initialization routines for the X input extension.
  *
  */
-#define ARRAY_SIZE(_a)        (sizeof((_a)) / sizeof((_a)[0]))
-
 #define	 NUMTYPES 15
 
 #ifdef HAVE_DIX_CONFIG_H
@@ -150,10 +148,8 @@ const Mask ChangeDeviceNotifyMask = (1L << 16);
 const Mask DeviceButtonGrabMask = (1L << 17);
 const Mask DeviceOwnerGrabButtonMask = (1L << 17);
 const Mask DevicePresenceNotifyMask = (1L << 18);
-const Mask DeviceEnterWindowMask = (1L << 18);
-const Mask DeviceLeaveWindowMask = (1L << 19);
-const Mask DevicePropertyNotifyMask = (1L << 20);
-const Mask XIAllMasks = (1L << 21) - 1;
+const Mask DevicePropertyNotifyMask = (1L << 19);
+const Mask XIAllMasks = (1L << 20) - 1;
 
 int ExtEventIndex;
 Mask ExtExclusiveMasks[EMASKSIZE];
@@ -162,25 +158,25 @@ static struct dev_type {
     Atom type;
     const char *name;
 } dev_type[] = {
-    {
-    0, XI_KEYBOARD}, {
-    0, XI_MOUSE}, {
-    0, XI_TABLET}, {
-    0, XI_TOUCHSCREEN}, {
-    0, XI_TOUCHPAD}, {
-    0, XI_BARCODE}, {
-    0, XI_BUTTONBOX}, {
-    0, XI_KNOB_BOX}, {
-    0, XI_ONE_KNOB}, {
-    0, XI_NINE_KNOB}, {
-    0, XI_TRACKBALL}, {
-    0, XI_QUADRATURE}, {
-    0, XI_ID_MODULE}, {
-    0, XI_SPACEBALL}, {
-    0, XI_DATAGLOVE}, {
-    0, XI_EYETRACKER}, {
-    0, XI_CURSORKEYS}, {
-0, XI_FOOTMOUSE}};
+    {0, XI_KEYBOARD},
+    {0, XI_MOUSE},
+    {0, XI_TABLET},
+    {0, XI_TOUCHSCREEN},
+    {0, XI_TOUCHPAD},
+    {0, XI_BARCODE},
+    {0, XI_BUTTONBOX},
+    {0, XI_KNOB_BOX},
+    {0, XI_ONE_KNOB},
+    {0, XI_NINE_KNOB},
+    {0, XI_TRACKBALL},
+    {0, XI_QUADRATURE},
+    {0, XI_ID_MODULE},
+    {0, XI_SPACEBALL},
+    {0, XI_DATAGLOVE},
+    {0, XI_EYETRACKER},
+    {0, XI_CURSORKEYS},
+    {0, XI_FOOTMOUSE}
+};
 
 CARD8 event_base[numInputClasses];
 XExtEventInfo EventInfo[32];
@@ -365,7 +361,7 @@ RESTYPE RT_INPUTCLIENT;
 
 extern XExtensionVersion XIVersion;
 
-Mask PropagateMask[MAXDEVICES];
+Mask PropagateMask[EMASKSIZE];
 
 /*****************************************************************
  *
@@ -438,8 +434,9 @@ SProcIDispatch(ClientPtr client)
 
 static void
 SReplyIDispatch(ClientPtr client, int len, xGrabDeviceReply * rep)
-                                        /* All we look at is the type field */
-{                               /* This is common to all replies    */
+{
+    /* All we look at is the type field */
+    /* This is common to all replies    */
     if (rep->RepType == X_GetExtensionVersion)
         SRepXGetExtensionVersion(client, len,
                                  (xGetExtensionVersionReply *) rep);
@@ -1137,6 +1134,9 @@ IResetProc(ExtensionEntry * unused)
     EventSwapVector[DevicePresenceNotify] = NotImplemented;
     EventSwapVector[DevicePropertyNotify] = NotImplemented;
     RestoreExtensionEvents();
+
+    free(xi_all_devices.name);
+    free(xi_all_master_devices.name);
 }
 
 /***********************************************************************
@@ -1298,9 +1298,9 @@ XInputExtensionInit(void)
         memset(&xi_all_devices, 0, sizeof(xi_all_devices));
         memset(&xi_all_master_devices, 0, sizeof(xi_all_master_devices));
         xi_all_devices.id = XIAllDevices;
-        xi_all_devices.name = "XIAllDevices";
+        xi_all_devices.name = strdup("XIAllDevices");
         xi_all_master_devices.id = XIAllMasterDevices;
-        xi_all_master_devices.name = "XIAllMasterDevices";
+        xi_all_master_devices.name = strdup("XIAllMasterDevices");
 
         inputInfo.all_devices = &xi_all_devices;
         inputInfo.all_master_devices = &xi_all_master_devices;

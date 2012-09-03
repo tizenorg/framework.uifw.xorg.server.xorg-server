@@ -55,6 +55,7 @@ typedef WINAPI HRESULT(*SHGETFOLDERPATHPROC) (HWND hwndOwner,
                                               DWORD dwFlags, LPTSTR pszPath);
 #endif
 
+#include "glx_extinit.h"
 /*
  * References to external symbols
  */
@@ -147,15 +148,30 @@ winClipboardShutdown(void)
 }
 #endif
 
-void
-ddxPushProviders(void)
+static const ExtensionModule xwinExtensions[] = {
+#ifdef GLXEXT
+  { GlxExtensionInit, "GLX", &noGlxExtension },
+#endif
+};
+
+/*
+ * XwinExtensionInit
+ * Initialises Xwin-specific extensions.
+ */
+static
+void XwinExtensionInit(void)
 {
+    int i;
+
 #ifdef XWIN_GLX_WINDOWS
-    if (g_fNativeGl) {
+    if ((g_fNativeGl) && (serverGeneration == 1)) {
         /* install the native GL provider */
         glxWinPushNativeProvider();
     }
 #endif
+
+    for (i = 0; i < ARRAY_SIZE(xwinExtensions); i++)
+        LoadExtension(&xwinExtensions[i], TRUE);
 }
 
 #if defined(DDXBEFORERESET)
@@ -884,6 +900,8 @@ void
 InitOutput(ScreenInfo * screenInfo, int argc, char *argv[])
 {
     int i;
+
+    XwinExtensionInit();
 
     /* Log the command line */
     winLogCommandLine(argc, argv);

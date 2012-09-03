@@ -138,7 +138,6 @@ Bool noDPMSExtension = FALSE;
 #endif
 #ifdef GLXEXT
 Bool noGlxExtension = FALSE;
-Bool noGlxVisualInit = FALSE;
 #endif
 #ifdef SCREENSAVER
 Bool noScreenSaverExtension = FALSE;
@@ -203,6 +202,8 @@ Bool PanoramiXExtensionDisabledHack = FALSE;
 int auditTrailLevel = 1;
 
 char *SeatId = NULL;
+
+sig_atomic_t inSignalContext = FALSE;
 
 #if defined(SVR4) || defined(__linux__) || defined(CSRG_BASED)
 #define HAS_SAVED_IDS_AND_SETEUID
@@ -659,6 +660,15 @@ ProcessCommandLine(int argc, char *argv[])
             else
                 UseMsg();
         }
+        else if (strcmp(argv[i], "-displayfd") == 0) {
+            if (++i < argc) {
+                displayfd = atoi(argv[i]);
+                display = NULL;
+                nolock = TRUE;
+            }
+            else
+                UseMsg();
+        }
 #ifdef DPMSExtension
         else if (strcmp(argv[i], "dpms") == 0)
             /* ignored for compatibility */ ;
@@ -746,8 +756,8 @@ ProcessCommandLine(int argc, char *argv[])
         else if (strcmp(argv[i], "-nolisten") == 0) {
             if (++i < argc) {
                 if (_XSERVTransNoListen(argv[i]))
-                    FatalError("Failed to disable listen for %s transport",
-                               argv[i]);
+                    ErrorF("Failed to disable listen for %s transport",
+                           argv[i]);
             }
             else
                 UseMsg();
@@ -1156,14 +1166,14 @@ OsBlockSignals(void)
     if (BlockedSignalCount++ == 0) {
         sigset_t set;
 
+#ifdef SIGIO
+        OsBlockSIGIO();
+#endif
         sigemptyset(&set);
         sigaddset(&set, SIGALRM);
         sigaddset(&set, SIGVTALRM);
 #ifdef SIGWINCH
         sigaddset(&set, SIGWINCH);
-#endif
-#ifdef SIGIO
-        sigaddset(&set, SIGIO);
 #endif
         sigaddset(&set, SIGTSTP);
         sigaddset(&set, SIGTTIN);
@@ -1174,13 +1184,71 @@ OsBlockSignals(void)
 #endif
 }
 
+#ifdef SIG_BLOCK
+static sig_atomic_t sigio_blocked;
+static sigset_t PreviousSigIOMask;
+#endif
+
+/**
+ * returns zero if this call caused SIGIO to be blocked now, non-zero if it
+ * was already blocked by a previous call to this function.
+ */
+int
+OsBlockSIGIO(void)
+{
+#ifdef SIGIO
+#ifdef SIG_BLOCK
+    if (sigio_blocked++ == 0) {
+        sigset_t set;
+        int ret;
+
+        sigemptyset(&set);
+        sigaddset(&set, SIGIO);
+        sigprocmask(SIG_BLOCK, &set, &PreviousSigIOMask);
+        ret = sigismember(&PreviousSigIOMask, SIGIO);
+        return ret;
+    } else
+        return 1;
+#endif
+#endif
+}
+
+void
+OsReleaseSIGIO(void)
+{
+#ifdef SIGIO
+#ifdef SIG_BLOCK
+    if (--sigio_blocked == 0) {
+        sigprocmask(SIG_SETMASK, &PreviousSigIOMask, 0);
+    } else if (sigio_blocked < 0) {
+        BUG_WARN(sigio_blocked < 0);
+        sigio_blocked = 0;
+    }
+#endif
+#endif
+}
+
 void
 OsReleaseSignals(void)
 {
 #ifdef SIG_BLOCK
     if (--BlockedSignalCount == 0) {
         sigprocmask(SIG_SETMASK, &PreviousSignalMask, 0);
+        OsReleaseSIGIO();
     }
+#endif
+}
+
+void
+OsResetSignals(void)
+{
+#ifdef SIG_BLOCK
+    while (BlockedSignalCount > 0)
+        OsReleaseSignals();
+#ifdef SIGIO
+    while (sigio_blocked > 0)
+        OsReleaseSIGIO();
+#endif
 #endif
 }
 
@@ -1490,6 +1558,79 @@ Fclose(pointer iop)
 
 #endif                          /* !WIN32 */
 
+#ifdef WIN32
+
+#include <X11/Xwindows.h>
+
+const char *
+Win32TempDir()
+{
+    static char buffer[PATH_MAX];
+
+    if (GetTempPath(sizeof(buffer), buffer)) {
+        int len;
+
+        buffer[sizeof(buffer) - 1] = 0;
+        len = strlen(buffer);
+        if (len > 0)
+            if (buffer[len - 1] == '\\')
+                buffer[len - 1] = 0;
+        return buffer;
+    }
+    if (getenv("TEMP") != NULL)
+        return getenv("TEMP");
+    else if (getenv("TMP") != NULL)
+        return getenv("TMP");
+    else
+        return "/tmp";
+}
+
+int
+System(const char *cmdline)
+{
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+    DWORD dwExitCode;
+    char *cmd = strdup(cmdline);
+
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    if (!CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        LPVOID buffer;
+
+        if (!FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                           FORMAT_MESSAGE_FROM_SYSTEM |
+                           FORMAT_MESSAGE_IGNORE_INSERTS,
+                           NULL,
+                           GetLastError(),
+                           MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                           (LPTSTR) & buffer, 0, NULL)) {
+            ErrorF("[xkb] Starting '%s' failed!\n", cmdline);
+        }
+        else {
+            ErrorF("[xkb] Starting '%s' failed: %s", cmdline, (char *) buffer);
+            LocalFree(buffer);
+        }
+
+        free(cmd);
+        return -1;
+    }
+    /* Wait until child process exits. */
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    GetExitCodeProcess(pi.hProcess, &dwExitCode);
+
+    /* Close process and thread handles. */
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    free(cmd);
+
+    return dwExitCode;
+}
+#endif
+
 /*
  * CheckUserParameters: check for long command line arguments and long
  * environment variables.  By default, these checks are only done when
@@ -1781,4 +1922,62 @@ xstrtokenize(const char *str, const char *separators)
         free(list[n]);
     free(list);
     return NULL;
+}
+
+/* Format a signed number into a string in a signal safe manner. The string
+ * should be at least 21 characters in order to handle all int64_t values.
+ */
+void
+FormatInt64(int64_t num, char *string)
+{
+    if (num < 0) {
+        string[0] = '-';
+        num *= -1;
+        string++;
+    }
+    FormatUInt64(num, string);
+}
+
+/* Format a number into a string in a signal safe manner. The string should be
+ * at least 21 characters in order to handle all uint64_t values. */
+void
+FormatUInt64(uint64_t num, char *string)
+{
+    uint64_t divisor;
+    int len;
+    int i;
+
+    for (len = 1, divisor = 10;
+         len < 20 && num / divisor;
+         len++, divisor *= 10);
+
+    for (i = len, divisor = 1; i > 0; i--, divisor *= 10)
+        string[i - 1] = '0' + ((num / divisor) % 10);
+
+    string[len] = '\0';
+}
+
+/* Format a number into a hexadecimal string in a signal safe manner. The string
+ * should be at least 17 characters in order to handle all uint64_t values. */
+void
+FormatUInt64Hex(uint64_t num, char *string)
+{
+    uint64_t divisor;
+    int len;
+    int i;
+
+    for (len = 1, divisor = 0x10;
+         len < 16 && num / divisor;
+         len++, divisor *= 0x10);
+
+    for (i = len, divisor = 1; i > 0; i--, divisor *= 0x10) {
+        int val = (num / divisor) % 0x10;
+
+        if (val < 10)
+            string[i - 1] = '0' + val;
+        else
+            string[i - 1] = 'a' + val - 10;
+    }
+
+    string[len] = '\0';
 }

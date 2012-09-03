@@ -38,9 +38,6 @@
 #include    "gcstruct.h"
 #include    "damage.h"
 #include    "damagestr.h"
-#ifdef COMPOSITE
-#include    "cw.h"
-#endif
 
 #define wrap(priv, real, mem, func) {\
     priv->mem = real->mem; \
@@ -1646,7 +1643,7 @@ damageDestroyWindow(WindowPtr pWindow)
 }
 
 static Bool
-damageCloseScreen(int i, ScreenPtr pScreen)
+damageCloseScreen(ScreenPtr pScreen)
 {
     damageScrPriv(pScreen);
 
@@ -1655,7 +1652,7 @@ damageCloseScreen(int i, ScreenPtr pScreen)
     unwrap(pScrPriv, pScreen, CopyWindow);
     unwrap(pScrPriv, pScreen, CloseScreen);
     free(pScrPriv);
-    return (*pScreen->CloseScreen) (i, pScreen);
+    return (*pScreen->CloseScreen) (pScreen);
 }
 
 /**

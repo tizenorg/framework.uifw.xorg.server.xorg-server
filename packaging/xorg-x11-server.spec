@@ -1,6 +1,6 @@
 Name:	    xorg-x11-server
 Summary:    X.Org X11 X server
-Version:    1.12.2
+Version:    1.12.99.905
 Release:    1
 Group:      System/X11
 License:    MIT
@@ -253,9 +253,9 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{_libdir}/xorg
 %dir %{_libdir}/xorg/modules
 %dir %{_libdir}/xorg/modules/extensions
-%{_libdir}/xorg/modules/extensions/libdri2.so
-%{_libdir}/xorg/modules/extensions/libextmod.so
-%{_libdir}/xorg/modules/extensions/librecord.so
+#%{_libdir}/xorg/modules/extensions/libdri2.so
+#%{_libdir}/xorg/modules/extensions/libextmod.so
+#%{_libdir}/xorg/modules/extensions/librecord.so
 %dir %{_libdir}/xorg/modules/multimedia
 %{_libdir}/xorg/modules/*.so
 

@@ -36,11 +36,11 @@
 
 /* See Porting Layer Definition - p. 6 */
 void
-winBlockHandler(int nScreen,
-                pointer pBlockData, pointer pTimeout, pointer pReadMask)
+winBlockHandler(ScreenPtr pScreen,
+                pointer pTimeout, pointer pReadMask)
 {
 #if defined(XWIN_CLIPBOARD) || defined(XWIN_MULTIWINDOW)
-    winScreenPriv((ScreenPtr) pBlockData);
+    winScreenPriv(pScreen);
 #endif
     MSG msg;
 
@@ -58,7 +58,7 @@ winBlockHandler(int nScreen,
     if (pScreenPriv != NULL && !pScreenPriv->fServerStarted) {
         int iReturn;
 
-        winDebug("winBlockHandler - Releasing pmServerStarted\n");
+        ErrorF("winBlockHandler - pthread_mutex_unlock()\n");
 
         /* Flag that modules are to be started */
         pScreenPriv->fServerStarted = TRUE;
