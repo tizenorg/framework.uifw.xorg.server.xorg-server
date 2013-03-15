@@ -69,19 +69,19 @@ static pointer truep = (pointer)1;
 #define SMACK_IN	"security.SMACK64IPIN"
 #define SMACK_OUT	"security.SMACK64IPOUT"
 
-static char *
+static inline char *
 SmackString(SmackLabel *label)
 {
     return (char *)&label->label;
 }
 
-static void
+static inline void
 SmackCopyLabel(SmackLabel *to, const SmackLabel *from)
 {
     strncpy(SmackString(to), (const char *)&from->label, SMACK_SIZE);
 }
 
-static void
+static inline void
 SmackCopyString(SmackLabel *to, const char *from)
 {
     strncpy(SmackString(to), from, SMACK_SIZE);
@@ -177,15 +177,12 @@ SmackDoCheck(const char *caller, int line,
     char *subject = SmackString(&subj->smack);
     const char *object = SmackString(&obj->smack);
     char access[6] = "-----";
-    static int passed;
-    static int failed;
-    static int prived;
     int rc;
 
     access[0] = (mode & SmackReadMask) ? 'r' : '-';
     access[1] = (mode & SmackWriteMask) ? 'w' : '-';
 
-    /* serverClient requests OK */
+    /* Privileged subjects get access */
     if (subj->privileged) {
 #ifdef SMACK_DEBUG
         if (strcmp(subject, object))
@@ -193,20 +190,38 @@ SmackDoCheck(const char *caller, int line,
 	        caller, line, __func__, subject, object, access,
                 "Privileged", subj->command);
 #endif /* SMACK_DEBUG */
-        prived++;
 	return Success;
     }
 
-    if (strcmp(object, SMACK_WEB) == 0)
-        object = SMACK_STAR;
-
+    /* Objects created by privileged subjects are accessible */
+    if (strcmp(object, SMACK_STAR) == 0 || strcmp(object, SMACK_WEB) == 0) {
 #ifdef SMACK_DEBUG
-        if (access[0] == access[1]) {
-            ErrorF("%s:%d     (\"%s\", \"%s\", %s)\n",
-	        __func__, line, subject, object, access);
-            return Success;
-        }
+        if (strcmp(subject, object))
+            ErrorF("%s:%d     %s(\"%s\", \"%s\", %s, ...) %s \"%s\"\n",
+	        caller, line, __func__, subject, object, access,
+                "Global Object", subj->command);
 #endif /* SMACK_DEBUG */
+	return Success;
+    }
+
+    /* Shortcut equal labels as we know the answer */
+    if (strcmp(subject, object) == 0) {
+#ifdef SMACK_DEBUG
+        ErrorF("%s:%d %s(\"%s\", \"%s\", %s, ...) %s \"%s\"\n",
+           caller, line, __func__, subject, object, access,
+           "Equal Labels", subj->command);
+#endif /* SMACK_DEBUG */
+	return Success;
+    }
+
+    if (access[0] == access[1]) {
+#ifdef SMACK_DEBUG
+        ErrorF("%s:%d %s(\"%s\", \"%s\", %s, ...) %s \"%s\"\n",
+           caller, line, __func__, subject, object, access,
+           "-- access", subj->command);
+#endif /* SMACK_DEBUG */
+        return Success;
+    }
 
     rc = SmackHaveAccess(subject, object, access);
     if (rc < 0)
@@ -219,11 +234,8 @@ SmackDoCheck(const char *caller, int line,
                    (rc == 0) ? "Failure" : "Success", subj->command);
 #endif /* SMACK_DEBUG */
 
-    if (rc > 0) {
-        passed++;
+    if (rc > 0)
         return Success;
-    }
-    failed++;
 
     return BadAccess;
 }

@@ -1,0 +1,3 @@
+* Mon Feb 25 2013 Ilkka Aulomaa <ilkkax.aulomaa@intel.com> submit/trunk/20130220.052008@bbc4e66
+- Fix for TDIS-4183. Add dpmsphone option to cover also xf86SaveScreen usage of DPMS.
+

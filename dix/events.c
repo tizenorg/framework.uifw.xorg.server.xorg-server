@@ -1435,6 +1435,7 @@ UpdateTouchesForGrab(DeviceIntPtr mouse)
                 ti->listeners[0].type = LISTENER_POINTER_GRAB;
             else
                 ti->listeners[0].type = LISTENER_GRAB;
+            ti->listeners[0].grab = grab;
         }
     }
 }
@@ -1508,6 +1509,24 @@ DeactivatePointerGrab(DeviceIntPtr mouse)
     XID grab_resource = grab->resource;
     int i;
 
+    Bool wasPassive = mouse->deviceGrab.fromPassiveGrab;
+
+    /* If an explicit grab was deactivated, we must remove it from the head of
+     * all the touches' listener lists. */
+    for (i = 0; !wasPassive && mouse->touch && i < mouse->touch->num_touches; i++) {
+        TouchPointInfoPtr ti = mouse->touch->touches + i;
+        if (ti->active && TouchResourceIsOwner(ti, grab_resource)) {
+            /* Rejecting will generate a TouchEnd, but we must not
+               emulate a ButtonRelease here. So pretend the listener
+               already has the end event */
+            if (grab->grabtype == CORE || grab->grabtype == XI ||
+                    !xi2mask_isset(mouse->deviceGrab.grab->xi2mask, mouse, XI_TouchBegin))
+                ti->listeners[0].state = LISTENER_HAS_END;
+            //Commented temporarily for a bug
+            //TouchListenerAcceptReject(mouse, ti, 0, XIRejectTouch);
+        }
+    }
+
     TouchRemovePointerGrab(mouse);
 
     mouse->valuator->motionHintWindow = NullWindow;
@@ -1531,15 +1550,6 @@ DeactivatePointerGrab(DeviceIntPtr mouse)
         ReattachToOldMaster(mouse);
 
     ComputeFreezes();
-
-    /* If an explicit grab was deactivated, we must remove it from the head of
-     * all the touches' listener lists. */
-    for (i = 0; mouse->touch && i < mouse->touch->num_touches; i++) {
-        TouchPointInfoPtr ti = mouse->touch->touches + i;
-
-        if (ti->active && TouchResourceIsOwner(ti, grab_resource))
-            TouchListenerAcceptReject(mouse, ti, 0, XIRejectTouch);
-    }
 }
 
 /**
