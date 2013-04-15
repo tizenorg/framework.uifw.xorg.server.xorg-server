@@ -307,6 +307,21 @@ DRI2LookupDrawableRef(DRI2DrawablePtr pPriv, XID id)
     return NULL;
 }
 
+#ifdef _F_DRI2_FIX_INVALIDATE
+static DRI2DrawableRefPtr
+DRI2LookupDrawableRefByClient(DRI2DrawablePtr pPriv, XID id, ClientPtr client)
+{
+    DRI2DrawableRefPtr ref;
+
+    xorg_list_for_each_entry(ref, &pPriv->reference_list, link) {
+        if ((ref->id == id) && (client->index == CLIENT_ID(ref->dri2_id)))
+            return ref;
+    }
+
+    return NULL;
+}
+#endif
+
 static int
 DRI2AddDrawableRef(DRI2DrawablePtr pPriv, XID id, XID dri2_id,
                    DRI2InvalidateProcPtr invalidate, void *priv)
@@ -352,6 +367,10 @@ DRI2CreateDrawable2(ClientPtr client, DrawablePtr pDraw, XID id,
         pPriv = DRI2AllocateDrawable(pDraw);
     if (pPriv == NULL)
         return BadAlloc;
+#ifdef _F_DRI2_FIX_INVALIDATE
+    if (DRI2LookupDrawableRefByClient(pPriv, id, client))
+        return Success;
+#endif
 
     pPriv->prime_id = dri2_client->prime_id;
 

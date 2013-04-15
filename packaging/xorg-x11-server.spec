@@ -1,7 +1,7 @@
 Name:	    xorg-x11-server
 Summary:    X.Org X11 X server
 Version:    1.13.0
-Release:    10
+Release:    11
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
@@ -186,6 +186,7 @@ drivers, input drivers, or other X modules should install this package.
 		-D_F_DRI2_SWAP_REGION_ \
 		-D_F_NOT_USE_SW_CURSOR_ \
 		-D_F_DPMS_PHONE_CTRL_ \
+		-D_F_DRI2_FIX_INVALIDATE \
         " \
 	CPPFLAGS="${CPPFLAGS} "
 
