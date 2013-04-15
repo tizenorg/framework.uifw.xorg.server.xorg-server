@@ -1162,26 +1162,29 @@ DRI2SwapBuffersWithRegion(ClientPtr client, DrawablePtr pDraw, CARD64 target_msc
     }
 
     pPriv->swapsPending++;
-    if(ds->ScheduleSwapWithRegion)
-    {
+    if(ds->ScheduleSwapWithRegion) {
         RegionRec region;
+        BoxRec box;
 
-        if(pRegion == NULL)
-        {
-            BoxRec box;
-
+        if (pRegion == NULL)  {
             box.x1 = pDraw->x;
             box.y1 = pDraw->y;
             box.x2 = box.x1 + pDraw->width;
             box.y2 = box.y1 + pDraw->height;
             RegionInit(&region, &box, 0);
             pRegion = &region;
+            ret = (*ds->ScheduleSwapWithRegion) (client, pDraw, pDestBuffer, pSrcBuffer,
+                                       swap_target, divisor, remainder, func, data, pRegion);
+        } else {
+            /* The region is relative to the drawable origin, so translate it out to
+            * screen coordinates like damage expects.
+            */
+            RegionTranslate(pRegion, pDraw->x, pDraw->y);
+            ret = (*ds->ScheduleSwapWithRegion) (client, pDraw, pDestBuffer, pSrcBuffer,
+                                       swap_target, divisor, remainder, func, data, pRegion);
+            RegionTranslate(pRegion, -pDraw->x, -pDraw->y);
         }
-
-        ret = (*ds->ScheduleSwapWithRegion) (client, pDraw, pDestBuffer, pSrcBuffer,
-                                   swap_target, divisor, remainder, func, data, pRegion);
-    }
-    else
+    } else
         ret = (*ds->ScheduleSwap) (client, pDraw, pDestBuffer, pSrcBuffer,
                                    swap_target, divisor, remainder, func, data);
 
