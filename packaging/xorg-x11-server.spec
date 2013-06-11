@@ -61,6 +61,7 @@ Common files shared among all X servers.
 Summary:    Xorg X server
 Group:      System/X11
 Requires:   xorg-x11-server-common = %{version}-%{release}
+Requires(post): sys-assert
 Provides:   xserver-xorg-core
 
 %description Xorg
