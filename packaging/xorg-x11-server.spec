@@ -1,6 +1,6 @@
 Name:	    xorg-x11-server
 Summary:    X.Org X11 X server
-Version:    1.13.3
+Version:    1.13.4
 Release:    12
 Group:      System/X11
 License:    MIT
@@ -130,7 +130,7 @@ drivers, input drivers, or other X modules should install this package.
 	--enable-xf86vidmode \
 	--enable-xace \
 	--disable-xselinux \
-	--enable-xsmack \
+	--disable-xsmack \
 	--disable-xcsecurity \
 	--disable-xcalibrate \
 	--disable-tslib \
