@@ -262,7 +262,7 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/license/xorg-x11-server-Xorg
 %defattr(-,root,root,-)
 %{_bindir}/X
-%{_bindir}/Xorg
+%attr(4755,root,root) %{_bindir}/Xorg
 %{_bindir}/gtf
 %{_bindir}/cvt
 %dir %{_libdir}/xorg
