@@ -120,6 +120,9 @@ Equipment Corporation.
 #include "panoramiX.h"
 #include "panoramiXsrv.h"
 #endif
+#ifdef _F_INPUT_REDIRECTION_
+#include "compint.h"
+#endif //_F_INPUT_REDIRECTION_
 #include "globals.h"
 
 #include <X11/extensions/XKBproto.h>
@@ -1873,14 +1876,16 @@ TryClientEvents(ClientPtr client, DeviceIntPtr dev, xEvent *pEvents,
     type = pEvents->u.u.type;
     if (type == MotionNotify) {
         if (mask & PointerMotionHintMask) {
+#ifndef _F_INPUT_REDIRECTION_
             if (WID(dev->valuator->motionHintWindow) ==
                 pEvents->u.keyButtonPointer.event) {
-#ifdef DEBUG_EVENTS
+ #ifdef DEBUG_EVENTS
                 ErrorF("[dix] \n");
                 ErrorF("[dix] motionHintWindow == keyButtonPointer.event\n");
-#endif
+ #endif
                 return 1;       /* don't send, but pretend we did */
             }
+#endif //_F_INPUT_REDIRECTION_
             pEvents->u.u.detail = NotifyHint;
         }
         else {
@@ -2777,10 +2782,19 @@ XYToWindow(SpritePtr pSprite, int x, int y)
 {
     WindowPtr pWin;
     BoxRec box;
+#ifdef _F_INPUT_REDIRECTION_
+    int rootX,rootY;
+
+    rootX = x;
+    rootY = y;
+#endif //_F_INPUT_REDIRECTION_
 
     pSprite->spriteTraceGood = 1;       /* root window still there */
     pWin = RootWindow(pSprite)->firstChild;
     while (pWin) {
+#ifdef _F_INPUT_REDIRECTION_
+        CompositeGetInvTransformPoint(pWin, rootX, rootY, &x, &y);
+#endif //_F_INPUT_REDIRECTION_
         if ((pWin->mapped) &&
             (x >= pWin->drawable.x - wBorderWidth(pWin)) &&
             (x < pWin->drawable.x + (int) pWin->drawable.width +
@@ -4191,8 +4205,13 @@ DeliverGrabbedEvent(InternalEvent *event, DeviceIntPtr thisDev,
             deliveries = DeliverDeviceEvents(pSprite->win, event, grab, focus,
                                              thisDev);
         else if (focus)
+#ifdef _F_INPUT_REDIRECTION_
+            deliveries = DeliverDeviceEvents(pSprite->win, event, grab, focus,
+                                             thisDev);
+#else //_F_INPUT_REDIRECTION_
             deliveries = DeliverDeviceEvents(focus, event, grab, focus,
                                              thisDev);
+#endif //_F_INPUT_REDIRECTION_
     }
     if (!deliveries) {
         /* XXX: In theory, we could pass the internal events through to
@@ -5149,6 +5168,9 @@ ProcQueryPointer(ClientPtr client)
     DeviceIntPtr keyboard;
     SpritePtr pSprite;
     int rc;
+#ifdef _F_INPUT_REDIRECTION_
+    int rootX, rootY;
+#endif //_F_INPUT_REDIRECTION_
 
     REQUEST(xResourceReq);
     REQUEST_SIZE_MATCH(xResourceReq);
@@ -5171,14 +5193,31 @@ ProcQueryPointer(ClientPtr client)
         .length = 0,
         .mask = event_get_corestate(mouse, keyboard),
         .root = (GetCurrentRootWindow(mouse))->drawable.id,
+#ifndef _F_INPUT_REDIRECTION_
         .rootX = pSprite->hot.x,
         .rootY = pSprite->hot.y,
+#endif //_F_INPUT_REDIRECTION_
         .child = None
     };
+#ifdef _F_INPUT_REDIRECTION_
+ #ifdef COMPOSITE
+    CompositeXYScreenToWindowRootCoordinate(pWin, pSprite->hot.x, pSprite->hot.y, &rootX, &rootY);
+    rep.rootX = rootX;
+    rep.rootY = rootY;
+ #else
+    rep.rootX = rootX = pSprite->hot.x;
+    rep.rootY = rootY = pSprite->hot.y;
+ #endif
+#endif //_F_INPUT_REDIRECTION_
     if (pSprite->hot.pScreen == pWin->drawable.pScreen) {
         rep.sameScreen = xTrue;
+#ifdef _F_INPUT_REDIRECTION_
+        rep.winX = rootX - pWin->drawable.x;
+        rep.winY = rootY - pWin->drawable.y;
+#else //_F_INPUT_REDIRECTION_
         rep.winX = pSprite->hot.x - pWin->drawable.x;
         rep.winY = pSprite->hot.y - pWin->drawable.y;
+#endif //_F_INPUT_REDIRECTION_
         for (t = pSprite->win; t; t = t->parent)
             if (t->parent == pWin) {
                 rep.child = t->drawable.id;
@@ -5837,6 +5876,18 @@ WriteEventsToClient(ClientPtr pClient, int count, xEvent *events)
     xEvent *eventTo, *eventFrom;
     int i, eventlength = sizeof(xEvent);
 
+#ifdef _F_INPUT_REDIRECTION_
+ #ifndef FP1616toDBL
+ #define FP1616toDBL(x) ((x) * 1.0 / (1 << 16))
+ #endif
+
+ #ifdef COMPOSITE
+    xEvent stackCopy;
+    xEvent *compEventCopy = &stackCopy;
+    xXIDeviceEvent *xde;
+ #endif
+#endif //_F_INPUT_REDIRECTION_
+
     if (!pClient || pClient == serverClient || pClient->clientGone)
         return;
 
@@ -5846,6 +5897,197 @@ WriteEventsToClient(ClientPtr pClient, int count, xEvent *events)
 
     /* Let XKB rewrite the state, as it depends on client preferences. */
     XkbFilterEvents(pClient, count, events);
+
+#ifdef _F_INPUT_REDIRECTION_
+ #ifdef COMPOSITE
+    Bool Must_have_memory;
+
+    if (count > 1)
+    {
+        Must_have_memory = TRUE; /* XXX */
+        compEventCopy = xalloc (count * sizeof (xEvent));
+        Must_have_memory = FALSE; /* XXX */
+
+        memcpy (compEventCopy, events, count * sizeof (xEvent));
+        events = compEventCopy;
+    }
+
+    for (i = 0; i < count; i++)
+    {
+       deviceKeyButtonPointer *deviceEvent;
+       WindowPtr pWin;
+       int       x, y, dx, dy;
+       DeviceIntPtr devinfo;
+       int index_abs_x, index_abs_y, index_abs_mt_x, index_abs_mt_y;
+       char *ptr;
+       FP3232 *axisval;
+
+       switch (events[i].u.u.type) {
+       case MotionNotify:
+       case ButtonPress:
+       case ButtonRelease:
+       case KeyPress:
+       case KeyRelease:
+       case EnterNotify:
+       case LeaveNotify:
+           dixLookupResourceByType((pointer) &pWin, events[i].u.keyButtonPointer.event, RT_WINDOW, NullClient, DixUnknownAccess);
+
+           if (pWin)
+           {
+               x = events[i].u.keyButtonPointer.rootX;
+               y = events[i].u.keyButtonPointer.rootY;
+
+               /*
+                * rootX and rootY are in screen coordinate space.
+                * Transform to windows root coordinate space before writing
+                * events to client.
+                */
+               CompositeXYScreenToWindowRootCoordinate (pWin, x, y, &x, &y);
+
+               dx = x - events[i].u.keyButtonPointer.rootX;
+               dy = y - events[i].u.keyButtonPointer.rootY;
+
+               events[i].u.keyButtonPointer.rootX  += dx;
+               events[i].u.keyButtonPointer.rootY  += dy;
+               events[i].u.keyButtonPointer.eventX += dx;
+               events[i].u.keyButtonPointer.eventY += dy;
+           }
+           break;
+
+       case GenericEvent:
+           xde = (xXIDeviceEvent *) events;
+           if(!xde)
+           {
+               ErrorF("[%s] xde is NULL !\n", __FUNCTION__);
+               break;
+           }
+
+           switch(xde->evtype)
+           {
+               case XI_ButtonPress:
+               case XI_ButtonRelease:
+               case XI_Motion:
+               case XI_TouchBegin:
+               case XI_TouchUpdate:
+               case XI_TouchEnd:
+               case XI_KeyPress:
+               case XI_KeyRelease:
+               case XI_Enter:
+               case XI_Leave:
+               case XI_FocusIn:
+               case XI_FocusOut:
+                   dixLookupResourceByType((pointer) &pWin, xde->event, RT_WINDOW, NullClient, DixUnknownAccess);
+
+                   if (pWin)
+                   {
+                       x = (int)FP1616toDBL(xde->root_x);
+                       y = (int)FP1616toDBL(xde->root_y);
+
+                       /*
+                        * rootX and rootY are in screen coordinate space.
+                        * Transform to windows root coordinate space before writing
+                        * events to client.
+                        */
+                       CompositeXYScreenToWindowRootCoordinate (pWin, x, y, &x, &y);
+
+                       dx = x - (int)FP1616toDBL(xde->root_x);
+                       dy = y - (int)FP1616toDBL(xde->root_y);
+
+                       xde->root_x   += double_to_fp1616((dx*1.0));
+                       xde->root_y   += double_to_fp1616((dy*1.0));
+                       xde->event_x += double_to_fp1616((dx*1.0));
+                       xde->event_y += double_to_fp1616((dy*1.0));
+                   }
+
+                   /* change valuator's values related to coordinations to composite coordinations */
+                   if (xde->evtype == XI_ButtonPress  ||
+                       xde->evtype == XI_ButtonRelease  ||
+                       xde->evtype == XI_Motion  ||
+                       xde->evtype == XI_TouchBegin  ||
+                       xde->evtype == XI_TouchUpdate  ||
+                       xde->evtype == XI_TouchEnd )
+                   {
+                        devinfo = GetDeviceInfoFromID(xde->deviceid);
+                        if (!devinfo)
+                        {
+                            ErrorF("[%s] devinfo is NULL !\n", __FUNCTION__);
+                            break;
+                        }
+
+                        index_abs_x = GetValuatorIndexFromAtomName(devinfo, AXIS_LABEL_PROP_ABS_X);
+                        index_abs_y = GetValuatorIndexFromAtomName(devinfo, AXIS_LABEL_PROP_ABS_Y);
+                        index_abs_mt_x = GetValuatorIndexFromAtomName(devinfo, AXIS_LABEL_PROP_ABS_MT_POSITION_X);
+                        index_abs_mt_y = GetValuatorIndexFromAtomName(devinfo, AXIS_LABEL_PROP_ABS_MT_POSITION_Y);
+
+                        ptr = (char *) &xde[1];
+                        ptr += xde->buttons_len * 4;
+                        axisval = (FP3232 *) (ptr + xde->valuators_len * 4);
+
+                        int i;
+                        for(i=0; i<xde->valuators_len*8; i++)
+                        {
+                            if (BitIsOn(ptr, i))
+                            {
+                                if (i == index_abs_x) {
+                                    *axisval = double_to_fp3232(fp1616_to_double(xde->root_x));
+                                }
+                                else if (i == index_abs_y) {
+                                    *axisval = double_to_fp3232(fp1616_to_double(xde->root_y));
+                                }
+                                else if (i == index_abs_mt_x) {
+                                    *axisval = double_to_fp3232(fp1616_to_double(xde->root_x));
+                                }
+                                else if (i == index_abs_mt_y) {
+                                    *axisval = double_to_fp3232(fp1616_to_double(xde->root_y));
+                                }
+                                axisval++;
+                            }
+                        }
+                   }
+                   break;
+
+		default:
+	           break;
+           }
+           break;
+
+       default:
+           if (events[i].u.u.type == DeviceMotionNotify  ||
+               events[i].u.u.type == DeviceButtonPress   ||
+               events[i].u.u.type == DeviceButtonRelease ||
+               events[i].u.u.type == DeviceKeyPress      ||
+               events[i].u.u.type == DeviceKeyRelease)
+           {
+               deviceEvent = (deviceKeyButtonPointer *) &events[i];
+
+               dixLookupResourceByType((pointer) &pWin, deviceEvent->event, RT_WINDOW, NullClient, DixUnknownAccess);
+
+               if (pWin)
+               {
+                   x = deviceEvent->root_x;
+                   y = deviceEvent->root_y;
+
+                   CompositeXYScreenToWindowRootCoordinate (pWin, x, y,
+                                                            &x, &y);
+
+                   dx = x - deviceEvent->root_x;
+                   dy = y - deviceEvent->root_y;
+
+                   deviceEvent->root_x  += dx;
+                   deviceEvent->root_y  += dy;
+                   deviceEvent->event_x += dx;
+                   deviceEvent->event_y += dy;
+               }
+           }
+           break;
+       }
+    }
+
+end_of_patches:
+	NoopDDA();
+
+ #endif
+#endif //_F_INPUT_REDIRECTION_
 
 #ifdef PANORAMIX
     if (!noPanoramiXExtension &&
@@ -5936,6 +6178,14 @@ WriteEventsToClient(ClientPtr pClient, int count, xEvent *events)
          * matter. And we're all set. Woohoo. */
         WriteToClient(pClient, count * eventlength, events);
     }
+
+#ifdef _F_INPUT_REDIRECTION_
+ #ifdef COMPOSITE
+    if(compEventCopy != &stackCopy)
+	xfree(compEventCopy );
+ #endif
+#endif //_F_INPUT_REDIRECTION_
+
 }
 
 /*

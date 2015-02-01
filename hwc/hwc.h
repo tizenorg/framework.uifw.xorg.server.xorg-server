@@ -33,6 +33,8 @@ typedef int (*hwc_open_proc)(ScreenPtr screen, int *maxLayer);
 
 typedef int (*hwc_set_drawables_proc) (ScreenPtr screen,
                                                DrawablePtr *drawables,
+                                               xRectangle *pSrcRects,
+                                               xRectangle *pDstRects,
                                                int count);
 
 typedef int (*hwc_update_drawable) (ScreenPtr screen,
@@ -41,14 +43,31 @@ typedef int (*hwc_update_drawable) (ScreenPtr screen,
                                                 int y,
                                                 int w,
                                                 int h);
-                                                
-typedef struct hwc_screen_info {
-    uint32_t                    version;
-    int                            maxLayer;        
 
-    hwc_open_proc              open;
-    hwc_set_drawables_proc    set_drawables;
+
+typedef void (*hwc_move_drawable) (ScreenPtr screen,
+                                                DrawablePtr drawable,
+                                                int x,
+                                                int y);
+
+
+typedef void (*hwc_resize_drawable) (ScreenPtr screen,
+                                                DrawablePtr drawable,
+                                                int x,
+                                                int y,
+                                                int w,
+                                                int h);
+
+
+typedef struct hwc_screen_info {
+    uint32_t                version;
+    int                     maxLayer;
+
+    hwc_open_proc           open;
+    hwc_set_drawables_proc  set_drawables;
     hwc_update_drawable     update_drawable;
+    hwc_move_drawable       move_drawable;
+    hwc_resize_drawable       resize_drawable;
 } hwc_screen_info_rec, *hwc_screen_info_ptr;
 
 extern _X_EXPORT Bool
@@ -61,6 +80,6 @@ int
 hwc_open(ClientPtr client, ScreenPtr screen, int *maxLayer);
 
 int
-hwc_set_drawables(ClientPtr client, ScreenPtr screen, XID* drawables, int count);
+hwc_set_drawables(ClientPtr client, ScreenPtr screen, XID* drawables, xRectangle *srcRects, xRectangle *dstRects, int count);
 
 #endif /* _HWC_H_ */

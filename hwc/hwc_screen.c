@@ -46,7 +46,7 @@ hwc_open(ClientPtr client, ScreenPtr screen, int *maxLayer)
 }
 
 int
-hwc_set_drawables(ClientPtr client, ScreenPtr screen, XID* ids, int count)
+hwc_set_drawables(ClientPtr client, ScreenPtr screen, XID* ids, xRectangle *srcRects, xRectangle *dstRects, int count)
 {
     hwc_screen_priv_ptr        ds = hwc_screen_priv(screen);
     hwc_screen_info_ptr        info = ds->info;
@@ -59,16 +59,26 @@ hwc_set_drawables(ClientPtr client, ScreenPtr screen, XID* ids, int count)
 
     if (count > info->maxLayer)
         return BadMatch;
-        
+
     drawables = (DrawablePtr *)malloc(sizeof(DrawablePtr)*count);
-    for(i=0; i < count; i++)
+    for(i = 0; i < count; i++)
     {
         rc  = dixLookupDrawable(drawables+i, ids[i], client, 0, DixReadAccess);
         if (rc != Success)
             return rc;
     }
+// temp code
+#if 0
+    for(i=0; i<count ; i++)
+    {
+        dstRects[i].x = drawables[i]->x;
+        dstRects[i].y = drawables[i]->y;
+        dstRects[i].width = drawables[i]->width;
+        dstRects[i].height = drawables[i]->height;
+    }
+#endif
 
-    rc = (*info->set_drawables)(screen, drawables, count);
+    rc = (*info->set_drawables)(screen, drawables, srcRects, dstRects, count);
     if (rc != Success)
         return rc;
 

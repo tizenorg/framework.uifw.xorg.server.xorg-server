@@ -934,3 +934,60 @@ GetXI2Type(enum EventType type)
     }
     return xi2type;
 }
+
+#ifdef _F_INPUT_REDIRECTION_
+DeviceIntPtr GetDeviceInfoFromID(int devid)
+{
+    DeviceIntPtr dev;
+    if (devid <= 0)
+    {
+        ErrorF("[%s] invalid devid(%d)\n", __FUNCTION__, devid);
+        return NULL;
+    }
+
+    for( dev = inputInfo.pointer ; dev; dev = dev->next )
+    {
+        if (!dev)   continue;
+        if (dev->id == devid)
+        {
+            return dev;
+        }
+    }
+    return NULL;
+}
+
+int GetValuatorIndexFromAtomName(DeviceIntPtr dev, char *aname)
+{
+    int index = -1;
+    Atom val_atom;
+    int numAxes, i;
+
+    if (!dev || !dev->valuator ||!aname)
+    {
+        ErrorF("[%s]Invalid dev or atom name\n", __FUNCTION__);
+        return index;
+    }
+
+    numAxes = dev->valuator->numAxes;
+    val_atom = XIGetKnownProperty(aname);
+
+    if (!numAxes || !val_atom)
+    {
+        ErrorF("[%s] %d device doesn't support %s valuator\n", __FUNCTION__, dev->id, aname);
+        return index;
+    }
+
+    for (i=0; i<numAxes; i++)
+    {
+        AxisInfoPtr axes = &dev->valuator->axes[i];
+        if (!axes || (axes->mode != Absolute))
+                continue;
+        if (axes->label == val_atom)
+        {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+#endif //_F_INPUT_REDIRECTION_

@@ -278,6 +278,9 @@ XkbDDXLoadKeymapByNames(DeviceIntPtr keybd,
             return 0;
     }
 
+    if(!file_name)
+        file_name = local_file_name;
+
     *xkbRtrn = NULL;
     if ((keybd == NULL) || (keybd->key == NULL) ||
         (keybd->key->xkbInfo == NULL))

@@ -4,5 +4,7 @@
 	</request>
 	<assign>
 		<filesystem path="/usr/bin/Xorg" label="xorg" exec_label="xorg"/>
+		<filesystem path="/usr/bin/cvt" label="xorg" exec_label="xorg"/>
+		<filesystem path="/usr/bin/gtf" label="xorg" exec_label="xorg"/>
 	</assign>
 </manifest>

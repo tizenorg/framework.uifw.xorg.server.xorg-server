@@ -16,5 +16,5 @@ Name: xorg-server
 Description: Modular X.Org X Server
 Version: @PACKAGE_VERSION@
 Requires.private: @SDK_REQUIRED_MODULES@
-Cflags: -I${sdkdir} @symbol_visibility@
+Cflags: -I${sdkdir} @symbol_visibility@ @IR_CFLAGS@
 Libs: -L${libdir} @XORG_DRIVER_LIBS@

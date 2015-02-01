@@ -515,6 +515,7 @@ AC_ARG_WITH(default-font-path, AS_HELP_STRING([--with-default-font-path=PATH], [
 AC_MSG_CHECKING([for default font path])
 AC_MSG_RESULT([$FONTPATH])
 
+AC_ARG_ENABLE(ir,             AS_HELP_STRING([--enable-ir], [Build Xorg with input redirection support (default: disabled)]), [IR=$enableval],[IR=no])
 AC_ARG_WITH(xkb-path,         AS_HELP_STRING([--with-xkb-path=PATH], [Path to XKB base dir (default: ${datadir}/X11/xkb)]),
 				[ XKBPATH="$withval" ],
 				[ XKBPATH="${datadir}/X11/xkb" ])
@@ -529,9 +530,9 @@ AC_ARG_WITH(default-xkb-rules, AS_HELP_STRING([--with-default-xkb-rules=RULES],
                                 [ XKB_DFLT_RULES="$withval" ],
                                 [ XKB_DFLT_RULES="" ])
 AC_ARG_WITH(default-xkb-model, AS_HELP_STRING([--with-default-xkb-model=MODEL],
-                                   [Keyboard model (default: pc105)]),
+                                   [Keyboard model (default: evdev)]),
                                 [ XKB_DFLT_MODEL="$withval" ],
-                                [ XKB_DFLT_MODEL="pc105" ])
+                                [ XKB_DFLT_MODEL="evdev" ])
 AC_ARG_WITH(default-xkb-layout, AS_HELP_STRING([--with-default-xkb-layout=LAYOUT],
                                    [Keyboard layout (default: us)]),
                                 [ XKB_DFLT_LAYOUT="$withval" ],
@@ -834,6 +835,26 @@ AC_SUBST(SDK_REQUIRED_MODULES)
 
 REQUIRED_MODULES="$FIXESPROTO $DAMAGEPROTO $XCMISCPROTO $XTRANS $BIGREQSPROTO $SDK_REQUIRED_MODULES"
 
+dnl systemd socket activation
+dnl activate the code in libxtrans that grabs systemd's socket fds
+AC_ARG_WITH([systemd-daemon],
+	AS_HELP_STRING([--with-systemd-daemon],
+		[support systemd socket activation (default: auto)]),
+	[WITH_SYSTEMD_DAEMON=$withval], [WITH_SYSTEMD_DAEMON=auto])
+PKG_CHECK_MODULES([SYSTEMD_DAEMON], [libsystemd-daemon], [HAVE_SYSTEMD_DAEMON=yes],
+		[HAVE_SYSTEMD_DAEMON=no])
+if test "x$WITH_SYSTEMD_DAEMON" = xauto; then
+	WITH_SYSTEMD_DAEMON="$HAVE_SYSTEMD_DAEMON"
+fi
+if test "x$WITH_SYSTEMD_DAEMON" = xyes; then
+	if "x$HAVE_SYSTEMD_DAEMON" = xno; then
+		AC_MSG_ERROR([systemd support requested but no library has been found])
+	fi
+	AC_DEFINE(HAVE_SYSTEMD_DAEMON, 1, [Define if libsystemd-daemon is available])
+	REQUIRED_LIBS="$REQUIRED_LIBS libsystemd-daemon"
+fi
+AM_CONDITIONAL([HAVE_SYSTEMD_DAEMON], [test "x$HAVE_SYSTEMD_DAEMON" = "xyes"])
+
 if test "x$CONFIG_UDEV" = xyes &&
  { test "x$CONFIG_DBUS_API" = xyes || test "x$CONFIG_HAL" = xyes; }; then
 	AC_MSG_ERROR([Hotplugging through both libudev and dbus/hal not allowed])
@@ -1109,6 +1130,12 @@ if test "x$GLX_USE_TLS" = xyes ; then
 fi
 AC_SUBST([GLX_DEFINES])
 AC_SUBST([GLX_SYS_LIBS])
+
+#AM_CONDITIONAL(IR, test "x$IR" = xyes)
+if test "x$IR" = xyes; then
+	IR_CFLAGS="-D_F_INPUT_REDIRECTION_"
+	AC_SUBST(IR_CFLAGS)
+fi
 
 AM_CONDITIONAL(DRI, test "x$DRI" = xyes)
 if test "x$DRI" = xyes; then

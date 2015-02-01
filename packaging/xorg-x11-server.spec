@@ -1,8 +1,7 @@
 Name:	    xorg-x11-server
 Summary:    X.Org X11 X server
-Version:    1.13.13
-Release:    13
-VCS:        framework/uifw/xorg/server/xorg-server#xorg-x11-server-1.13.0-12-29-g49406d2b8f214c72b80593155dc3c10852d40f7f
+Version:    1.13.29
+Release:    2
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
@@ -42,6 +41,7 @@ BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  libpciaccess-devel
 BuildRequires:  libgcrypt-devel
 BuildRequires:  xorg-x11-proto-hwc
+BuildRequires:  pkgconfig(libsystemd-daemon)
 
 
 %description
@@ -174,6 +174,8 @@ drivers, input drivers, or other X modules should install this package.
 	--with-sha1=libgcrypt \
 	--enable-gestures \
 	--disable-hwc \
+	--enable-ir \
+	--with-systemd-daemon \
 	CFLAGS="${CFLAGS} \
 		-Wall -g \
 		-D_F_UDEV_DEBUG_ \
@@ -183,18 +185,25 @@ drivers, input drivers, or other X modules should install this package.
 		-D_F_CHECK_NULL_CLIENT_ \
 		-D_F_COMP_OVL_PATCH \
 		-D_F_PUT_ON_PIXMAP_ \
+		-D_F_GETSTILL_GET_STOP_REQUEST_ \
 		-D_F_IGNORE_MOVE_SPRITE_FOR_FLOATING_POINTER_ \
 		-D_F_NOT_ALWAYS_CREATE_FRONTBUFFER_ \
 		-D_F_DISABLE_SCALE_TO_DESKTOP_FOR_DIRECT_TOUCH_ \
 		-D_F_GESTURE_EXTENSION_ \
 		-D_F_DO_NULL_CHECK_AT_XKBFAKEDEVICEBUTTON_ \
 		-D_F_DRI2_SWAP_REGION_ \
+		-D_F_NO_DAMAGE_DESCENDANT_FOR_HWC_ \
 		-D_F_NOT_USE_SW_CURSOR_ \
 		-D_F_DPMS_PHONE_CTRL_ \
 		-D_F_DRI2_FIX_INVALIDATE \
 		-D_F_RETURN_IF_INPUT_REMAINS_IN_WAITFORSTH_ \
 		-D_F_NO_INPUT_INIT_ \
-        -D_F_EXCLUDE_NON_MASK_SELECTED_FD_FROM_MAXCLIENTS_
+		-D_F_EXCLUDE_NON_MASK_SELECTED_FD_FROM_MAXCLIENTS_ \
+		-D_F_HWC_EXTENSION_ \
+		-D_F_MIEQ_SPRITEINFO_NULL_CHECK_ \
+		-D_F_DO_NOT_COPY_IN_RESIZE_WINDOW \
+		-D_F_SET_XKB_DEFAULT_OPTIONS_FROM_CONFIGURE_ \
+		-D_F_INPUT_REDIRECTION_ \
         " \
 	CPPFLAGS="${CPPFLAGS} "
 
@@ -203,16 +212,14 @@ drivers, input drivers, or other X modules should install this package.
 #		-D_F_NO_FLOATINGDEVICE_ERROR_ \
 #		-D_F_ENABLE_XI2_SENDEVENT_ \
 #		-D_F_BG_NONE_ROOT_ \
-#       -D_F_HWC_EXTENSION_ \
 
 make %{?jobs:-j%jobs}
 
 %install
 rm -rf %{buildroot}
 mkdir -p %{buildroot}/usr/share/license
-cp -af COPYING %{buildroot}/usr/share/license/%{name}-common
-cp -af COPYING %{buildroot}/usr/share/license/%{name}-Xorg
-cp -af COPYING %{buildroot}/usr/share/license/%{name}-devel
+cp -af COPYING %{buildroot}/usr/share/license/xorg-x11-server-common
+cp -af COPYING %{buildroot}/usr/share/license/xorg-x11-server-Xorg
 
 %make_install
 
@@ -263,13 +270,13 @@ rm -rf $RPM_BUILD_ROOT
 
 %files common
 %manifest xorg-x11-server-common.manifest
-/usr/share/license/%{name}-common
+/usr/share/license/xorg-x11-server-common
 %defattr(-,root,root,-)
 %{_libdir}/xorg/protocol.txt
 
 %files Xorg
 %manifest xorg-x11-server-Xorg.manifest
-/usr/share/license/%{name}-Xorg
+/usr/share/license/xorg-x11-server-Xorg
 %defattr(-,root,root,-)
 %{_bindir}/X
 %{_bindir}/Xorg
@@ -277,11 +284,11 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/cvt
 %dir %{_libdir}/xorg
 %dir %{_libdir}/xorg/modules
-%dir %{_libdir}/xorg/modules/extensions
+#%dir %{_libdir}/xorg/modules/extensions
 #%{_libdir}/xorg/modules/extensions/libdri2.so
 #%{_libdir}/xorg/modules/extensions/libextmod.so
 #%{_libdir}/xorg/modules/extensions/librecord.so
-%dir %{_libdir}/xorg/modules/multimedia
+#%dir %{_libdir}/xorg/modules/multimedia
 %{_libdir}/xorg/modules/*.so
 %{_libdir}/xorg/xserver-keymap-dir
 %dir /var/xkb
@@ -292,7 +299,6 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{_includedir}/xorg
 %{_includedir}/xorg/*.h
 %{_datadir}/aclocal/xorg-server.m4
-/usr/share/license/%{name}-devel
 
 #%files source
 #%defattr(-, root, root, -)

@@ -37,4 +37,28 @@ extern _X_EXPORT Bool CompositeRegisterAlternateVisuals(ScreenPtr pScreen,
 
 extern _X_EXPORT RESTYPE CompositeClientWindowType;
 
+#ifdef _F_INPUT_REDIRECTION_
+extern _X_EXPORT Bool CompositeGetTransformPoint (WindowPtr pChild,
+                         int      x,
+                         int      y,
+                         int      *tx,
+                         int      *ty);
+extern _X_EXPORT Bool CompositeGetInvTransformPoint (WindowPtr pChild,
+                         int      x,
+                         int      y,
+                         int      *tx,
+                         int      *ty);
+extern _X_EXPORT void CompositeXYScreenToWindowRootCoordinate (WindowPtr pWin,
+                         int       x,
+                         int       y,
+                         int       *rootX,
+                         int       *rootY);
+extern _X_EXPORT void CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
+                         int       x,
+                         int       y,
+                         int       *screenX,
+                         int       *screenY);
+extern _X_EXPORT int CompositeSetCoordinateTransform (ClientPtr pClient, WindowPtr pWin, PictTransformPtr pTransform);
+#endif //_F_INPUT_REDIRECTION_
+
 #endif                          /* _COMPOSITEEXT_H_ */

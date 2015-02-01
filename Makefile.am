@@ -17,10 +17,6 @@ if RECORD
 RECORD_DIR=record
 endif
 
-if HWC
-HWC_DIR=hwc
-endif
-
 SUBDIRS = \
 	doc \
 	man \
@@ -44,7 +40,7 @@ SUBDIRS = \
 	exa \
 	config \
 	gesture \
-	$(HWC_DIR) \
+	hwc \
 	hw \
 	test
 

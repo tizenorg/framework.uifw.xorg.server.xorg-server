@@ -39,35 +39,95 @@ hwc_close_screen(ScreenPtr screen)
 
     unwrap(screen_priv, screen, CloseScreen);
 
+    if( screen_priv->info != NULL )
+    {
+        free(screen_priv->info);
+    }
+
     free(screen_priv);
+
     return (*screen->CloseScreen) (screen);
 }
 
-static int 
-hwc_config_notify (WindowPtr pWin ,
-                                    int x ,
-                                    int y ,
-                                    int w ,
-                                    int h ,
-                                    int bw ,
-                                    WindowPtr pSib )
+static int
+hwc_config_notify (WindowPtr pWin, int x, int y, int w, int h,
+        int bw, WindowPtr pSib)
 {
     DrawablePtr drawable = (DrawablePtr) pWin;
     ScreenPtr screen = drawable->pScreen;
     hwc_screen_priv_ptr screen_priv = hwc_screen_priv(screen);
-    int ret;
+    hwc_screen_info_ptr info = screen_priv->info;
+    int ret = Success;
 
-    unwrap(screen_priv, screen, ConfigNotify);
-    ret = (*screen->ConfigNotify) (pWin, x, y, w, h, bw, pSib);
-    wrap(screen_priv, screen, ConfigNotify, hwc_config_notify);
 
-    
-    /* TODO */
-    
+    if (screen_priv->ConfigNotify)
+    {
+        screen->ConfigNotify = screen_priv->ConfigNotify;
+        ret = (*screen->ConfigNotify) (pWin, x, y, w, h, bw, pSib);
+        screen_priv->ConfigNotify = screen->ConfigNotify;
+        screen->ConfigNotify = hwc_config_notify;
+
+        if (ret)
+            return ret;
+    }
+
+    if (info && info->update_drawable)
+    {
+        ret = (*info->update_drawable) (screen, drawable, x, y, w, h);
+        if (ret)
+            return Success;
+    }
+
     return ret;
 }
 
-static int 
+static void
+hwc_move_window (WindowPtr pWin, int x, int y, WindowPtr pSib, VTKind vt_kind)
+{
+    DrawablePtr drawable = (DrawablePtr) pWin;
+    ScreenPtr screen = drawable->pScreen;
+    hwc_screen_priv_ptr screen_priv = hwc_screen_priv(screen);
+    hwc_screen_info_ptr info = screen_priv->info;
+
+    if (screen_priv->MoveWindow)
+    {
+        screen->MoveWindow = screen_priv->MoveWindow;
+        (*screen->MoveWindow) (pWin, x, y, pSib, vt_kind);
+        screen_priv->MoveWindow = screen->MoveWindow;
+        screen->MoveWindow = hwc_move_window;
+    }
+
+    if (info && info->move_drawable)
+        (*info->move_drawable) (screen, drawable, x, y);
+
+}
+
+
+static void
+hwc_resize_window (WindowPtr pWin, int x, int y,
+        unsigned int w, unsigned int h, WindowPtr  pSib)
+{
+    DrawablePtr drawable = (DrawablePtr) pWin;
+    ScreenPtr screen = drawable->pScreen;
+    hwc_screen_priv_ptr screen_priv = hwc_screen_priv(screen);
+    hwc_screen_info_ptr info = screen_priv->info;
+    int ret = Success;
+
+
+    if (screen_priv->ResizeWindow)
+    {
+        screen->ResizeWindow = screen_priv->ResizeWindow;
+        (*screen->ResizeWindow) (pWin, x, y, w, h, pSib);
+        screen_priv->ResizeWindow = screen->ResizeWindow;
+        screen->ResizeWindow = hwc_resize_window;
+    }
+
+    if (info && info->resize_drawable)
+        (*info->resize_drawable) (screen, drawable, x, y, w, h);
+}
+
+
+static int
 hwc_destroy_window (WindowPtr pWin)
 {
     DrawablePtr drawable = (DrawablePtr) pWin;
@@ -76,7 +136,7 @@ hwc_destroy_window (WindowPtr pWin)
     int ret;
 
     hwc_free_events(pWin);
-    
+
     unwrap(screen_priv, screen, DestroyWindow);
     ret = (*screen->DestroyWindow) (pWin);
     wrap(screen_priv, screen, DestroyWindow, hwc_destroy_window);
@@ -88,16 +148,20 @@ hwc_destroy_window (WindowPtr pWin)
 Bool
 hwc_screen_init(ScreenPtr screen, hwc_screen_info_ptr info)
 {
+    hwc_screen_priv_ptr screen_priv;
+
     if (!dixRegisterPrivateKey(&hwc_screen_private_key, PRIVATE_SCREEN, 0))
         return FALSE;
 
     if (!hwc_screen_priv(screen)) {
-        hwc_screen_priv_ptr screen_priv = calloc(1, sizeof (hwc_screen_priv_rec));
+        screen_priv = calloc(1, sizeof (hwc_screen_priv_rec));
         if (!screen_priv)
             return FALSE;
 
         wrap(screen_priv, screen, CloseScreen, hwc_close_screen);
         wrap(screen_priv, screen, ConfigNotify, hwc_config_notify);
+        wrap(screen_priv, screen, MoveWindow, hwc_move_window);
+        wrap(screen_priv, screen, ResizeWindow, hwc_resize_window);
         wrap(screen_priv, screen, DestroyWindow, hwc_destroy_window);
 
         screen_priv->info = info;
@@ -124,7 +188,7 @@ hwc_extension_init(void)
 
     if (!hwc_event_init())
         goto bail;
-        
+
     for (i = 0; i < screenInfo.numScreens; i++) {
         if (!hwc_screen_init(screenInfo.screens[i], NULL))
             goto bail;

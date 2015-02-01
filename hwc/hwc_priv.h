@@ -53,6 +53,8 @@ extern DevPrivateKeyRec hwc_screen_private_key;
 typedef struct hwc_screen_priv {
     CloseScreenProcPtr          CloseScreen;
     ConfigNotifyProcPtr         ConfigNotify;
+    MoveWindowProcPtr           MoveWindow;
+    ResizeWindowProcPtr         ResizeWindow;
     DestroyWindowProcPtr        DestroyWindow;
 
     hwc_screen_info_ptr        info;

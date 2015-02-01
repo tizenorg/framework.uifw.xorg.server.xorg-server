@@ -9,11 +9,6 @@ DRI2_SUBDIR = dri2
 DRI2_LIB = dri2/libdri2.la
 endif
 
-if HWC
-HWC_SUBDIR = hwc
-HWC_LIB = dri2/libhwc.la
-endif
-
 if XF86UTILS
 XF86UTILS_SUBDIR = utils
 endif
@@ -64,7 +59,7 @@ LOCAL_LIBS = \
             dixmods/libxorgxkb.la \
             $(DRI_LIB) \
             $(DRI2_LIB) \
-            $(HWC_LIB) \
+            $(top_builddir)/hwc/libhwc.la \
             $(top_builddir)/mi/libmi.la \
             $(top_builddir)/os/libos.la
 Xorg_LDADD = \

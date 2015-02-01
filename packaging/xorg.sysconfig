@@ -1,0 +1,3 @@
+DISPLAY=":0"
+OPTIONS="-logfile /var/log/Xorg.0.log -ac -noreset +accessx 0 +dpmsphone"
+XORG_CONF="-config /etc/X11/xorg.conf -configdir /etc/X11/xorg.conf.d"

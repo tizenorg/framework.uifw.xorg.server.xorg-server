@@ -26,13 +26,13 @@ Copyright 1987 by Digital Equipment Corporation, Maynard, Massachusetts.
 
                         All Rights Reserved
 
-Permission to use, copy, modify, and distribute this software and its 
-documentation for any purpose and without fee is hereby granted, 
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
 provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in 
+both that copyright notice and this permission notice appear in
 supporting documentation, and that the name of Digital not be
 used in advertising or publicity pertaining to distribution of the
-software without specific, written prior permission.  
+software without specific, written prior permission.
 
 DIGITAL DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
 ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
@@ -215,6 +215,26 @@ typedef void (*mieqHandler) (int screen, InternalEvent *event,
 void _X_EXPORT mieqSetHandler(int event, mieqHandler handler);
 
 /* miexpose.c */
+
+typedef struct _Event {
+    InternalEvent *events;
+    ScreenPtr pScreen;
+    DeviceIntPtr pDev;          /* device this event _originated_ from */
+} EventRec, *EventPtr;
+
+typedef struct _EventQueue {
+    HWEventQueueType head, tail;        /* long for SetInputCheck */
+    CARD32 lastEventTime;       /* to avoid time running backwards */
+    int lastMotion;             /* device ID if last event motion? */
+    EventRec *events;           /* our queue as an array */
+    size_t nevents;             /* the number of buckets in our queue */
+    size_t dropped;             /* counter for number of consecutive dropped events */
+    mieqHandler handlers[128];  /* custom event handler */
+} EventQueueRec, *EventQueuePtr;
+
+extern _X_EXPORT EventQueuePtr mieqGetEventQueuePtr();
+
+extern _X_EXPORT size_t mieqNumEnqueued(EventQueuePtr eventQueue);
 
 extern _X_EXPORT RegionPtr miHandleExposures(DrawablePtr /*pSrcDrawable */ ,
                                              DrawablePtr /*pDstDrawable */ ,

@@ -562,7 +562,7 @@ miSlideAndSizeWindow(WindowPtr pWin,
             }
 
             /* and move those bits */
-
+#ifndef _F_DO_NOT_COPY_IN_RESIZE_WINDOW
             if (oldpt.x != x || oldpt.y != y
 #ifdef COMPOSITE
                 || pWin->redirectDraw
@@ -571,6 +571,7 @@ miSlideAndSizeWindow(WindowPtr pWin,
                 (*pWin->drawable.pScreen->CopyWindow) (pWin, oldpt,
                                                        gravitate[g]);
             }
+#endif
 
             /* remove any overwritten bits from the remaining useful bits */
 

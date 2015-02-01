@@ -342,6 +342,8 @@ static void GestureResourceStateCallback(CallbackListPtr *pcbl, pointer closure,
 	if( !grabbed_events_mask )
 		return;
 
+	Mask prev_grabbed_events_mask = grabbed_events_mask;
+
 #ifdef __DEBUG_GESTURE_EXT__
 	ErrorF("[X11][GestureResourceStateCallback] rec->id=0x%x, pWin->drawable.id=0x%x\n", rec->id, pWin->drawable.id);
 	ErrorF("[X11][GestureResourceStateCallback][start] grabbed_events_mask=0x%x\n", grabbed_events_mask);
@@ -378,6 +380,11 @@ static void GestureResourceStateCallback(CallbackListPtr *pcbl, pointer closure,
 #endif//__DEBUG_GESTURE_EXT__
 		}		
 	}
+
+	if((grabbed_events_mask != prev_grabbed_events_mask) && gpGestureEventsGrabbed)
+    {
+        gpGestureEventsGrabbed(&grabbed_events_mask, &grabbed_events);
+    }
 
 #ifdef __DEBUG_GESTURE_EXT__
 	ErrorF("[X11][GestureResourceStateCallback][end] grabbed_events_mask=0x%x\n", grabbed_events_mask);

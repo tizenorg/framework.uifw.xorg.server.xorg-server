@@ -97,6 +97,10 @@ typedef struct _CompWindow {
     int oldy;
     PixmapPtr pOldPixmap;
     int borderClipX, borderClipY;
+#ifdef _F_INPUT_REDIRECTION_
+    PictTransformPtr pTransform;
+    PictTransformPtr pInvTransform;
+#endif //_F_INPUT_REDIRECTION_
 } CompWindowRec, *CompWindowPtr;
 
 #define COMP_ORIGIN_INVALID	    0x80000000
@@ -328,5 +332,34 @@ compConfigNotify(WindowPtr pWin, int x, int y, int w, int h,
 
 void PanoramiXCompositeInit(void);
 void PanoramiXCompositeReset(void);
+
+#ifdef _F_INPUT_REDIRECTION_
+Bool
+CompositeGetTransformPoint (WindowPtr pChild,
+                         int      x,
+                         int      y,
+                         int      *tx,
+                         int      *ty);
+Bool
+CompositeGetInvTransformPoint (WindowPtr pChild,
+                         int      x,
+                         int      y,
+                         int      *tx,
+                         int      *ty);
+void
+CompositeXYScreenToWindowRootCoordinate (WindowPtr pWin,
+                                        int       x,
+                                        int       y,
+                                        int       *rootX,
+                                        int       *rootY);
+void
+CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
+                                          int       x,
+                                          int       y,
+                                          int       *screenX,
+                                          int       *screenY);
+int
+CompositeSetCoordinateTransform (ClientPtr pClient, WindowPtr pWin, PictTransformPtr pTransform);
+#endif //_F_INPUT_REDIRECTION_
 
 #endif                          /* _COMPINT_H_ */

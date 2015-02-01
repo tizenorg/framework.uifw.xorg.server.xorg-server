@@ -101,9 +101,13 @@ proc_hwc_set_drawables(ClientPtr client)
     WindowPtr window;
     ScreenPtr screen;
     int status;
+    int i;
+    xHWCDrawInfo *drawInfo;
     XID *drawables;
+    xRectangle *srcRects;
+    xRectangle *dstRects;
 
-    REQUEST_FIXED_SIZE(xHWCSetDrawablesReq, stuff->count * 4);
+    REQUEST_FIXED_SIZE(xHWCSetDrawablesReq, stuff->count * 20);
 
     status  = dixLookupWindow(&window, stuff->window, client, DixReadAccess);
     if (status != Success)
@@ -111,8 +115,32 @@ proc_hwc_set_drawables(ClientPtr client)
 
     screen = window->drawable.pScreen;
 
-    drawables = (XID*) &stuff[1];
-    status = hwc_set_drawables(client, screen, drawables, stuff->count);
+    drawables = (XID *)calloc(1, sizeof(XID) * stuff->count);
+    srcRects = (xRectangle *)calloc(1, sizeof(xRectangle) * stuff->count);
+    dstRects = (xRectangle *)calloc(1, sizeof(xRectangle) * stuff->count);
+    //drawables = (XID*) &stuff[1];
+    drawInfo = (xHWCDrawInfo *) &stuff[1];
+    for(i=0; i<stuff->count ; i++)
+    {
+        drawables[i] = drawInfo[i].drawable;
+        srcRects[i].x = drawInfo[i].srcX;
+        srcRects[i].y = drawInfo[i].srcY;
+        srcRects[i].width = drawInfo[i].srcWidth;
+        srcRects[i].height = drawInfo[i].srcHeight;
+        dstRects[i].x = drawInfo[i].dstX;
+        dstRects[i].y = drawInfo[i].dstY;
+        dstRects[i].width = drawInfo[i].dstWidth;
+        dstRects[i].height = drawInfo[i].dstHeight;
+        ErrorF("srcRects[%d] - drawable(%d) src_rect(%d,%d,%d,%d) dst_rect(%d,%d,%d,%d)  count(%d)\n",
+                i,drawInfo[i].drawable,srcRects[i].x, srcRects[i].y, srcRects[i].width, srcRects[i].height,
+                 dstRects[i].x, dstRects[i].y, dstRects[i].width, dstRects[i].height, stuff->count);
+    }
+
+    status = hwc_set_drawables(client, screen, drawables, srcRects, dstRects, stuff->count);
+
+    free(drawables);
+    free(srcRects);
+    free(dstRects);
 
     return status;
 }

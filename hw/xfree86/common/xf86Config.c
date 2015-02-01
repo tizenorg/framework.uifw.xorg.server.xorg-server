@@ -776,11 +776,19 @@ configServerFlags(XF86ConfFlagsPtr flagsconf, XF86OptionPtr layoutopts)
     XkbRMLVOSet set;
 
     /* Default options. */
+#ifndef _F_SET_XKB_DEFAULT_OPTIONS_FROM_CONFIGURE_
     set.rules = "base";
     set.model = "pc105";
     set.layout = "us";
     set.variant = NULL;
     set.options = NULL;
+#else//_F_SET_XKB_DEFAULT_OPTIONS_FROM_CONFIGURE_
+    set.rules = XKB_DFLT_RULES?XKB_DFLT_RULES:"base";
+    set.model = XKB_DFLT_MODEL?XKB_DFLT_MODEL:"pc105";
+    set.layout = XKB_DFLT_LAYOUT?XKB_DFLT_LAYOUT:"us";
+    set.variant = XKB_DFLT_VARIANT?XKB_DFLT_VARIANT:NULL;
+    set.options = XKB_DFLT_OPTIONS?XKB_DFLT_OPTIONS:NULL;
+#endif//_F_SET_XKB_DEFAULT_OPTIONS_FROM_CONFIGURE_
 
     /*
      * Merge the ServerLayout and ServerFlags options.  The former have
