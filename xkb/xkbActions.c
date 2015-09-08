@@ -350,7 +350,7 @@ _XkbFilterLockState(XkbSrvInfoPtr xkbi,
             xkbi->state.locked_group += XkbSAGroup(&pAction->group);
         return 1;
     }
-    if (filter->keycode == 0) { /* initial press */
+    if (filter->keycode == 0 && pAction) { /* initial press */
         filter->keycode = keycode;
         filter->active = 1;
         filter->filterOthers = 0;
@@ -1051,6 +1051,7 @@ _XkbNextFreeFilter(XkbSrvInfoPtr xkbi)
         xkbi->szFilters = 4;
         xkbi->filters = calloc(xkbi->szFilters, sizeof(XkbFilterRec));
         /* 6/21/93 (ef) -- XXX! deal with allocation failure */
+        if (!(xkbi->filters)) return NULL;
     }
     for (i = 0; i < xkbi->szFilters; i++) {
         if (!xkbi->filters[i].active) {
@@ -1061,6 +1062,7 @@ _XkbNextFreeFilter(XkbSrvInfoPtr xkbi)
     xkbi->szFilters *= 2;
     xkbi->filters = realloc(xkbi->filters,
                             xkbi->szFilters * sizeof(XkbFilterRec));
+    if (!(xkbi->filters)) return NULL;
     /* 6/21/93 (ef) -- XXX! deal with allocation failure */
     memset(&xkbi->filters[xkbi->szFilters / 2], 0,
            (xkbi->szFilters / 2) * sizeof(XkbFilterRec));
@@ -1405,12 +1407,14 @@ InjectPointerKeyEvents(DeviceIntPtr dev, int type, int button, int flags,
     events = InitEventList(GetMaximumEventsNum() + 1);
     OsBlockSignals();
     pScreen = miPointerGetScreen(ptr);
-    saveWait = miPointerSetWaitForUpdate(pScreen, FALSE);
+    if (pScreen)
+        saveWait = miPointerSetWaitForUpdate(pScreen, FALSE);
     nevents = GetPointerEvents(events, ptr, type, button, flags, mask);
     if (IsMaster(dev) && (lastSlave && lastSlave != ptr))
         UpdateFromMaster(&events[nevents], lastSlave, DEVCHANGE_POINTER_EVENT,
                          &nevents);
-    miPointerSetWaitForUpdate(pScreen, saveWait);
+    if (pScreen)
+        miPointerSetWaitForUpdate(pScreen, saveWait);
     OsReleaseSignals();
 
     for (i = 0; i < nevents; i++)
@@ -1464,6 +1468,11 @@ XkbFakeDeviceButton(DeviceIntPtr dev, Bool press, int button)
         ptr = dev;
     else
         return;
+
+#ifdef _F_DO_NULL_CHECK_AT_XKBFAKEDEVICEBUTTON_
+    if (!ptr)
+        return;		
+#endif /* #ifdef _F_DO_NULL_CHECK_AT_XKBFAKEDEVICEBUTTON_ */
 
     down = button_is_down(ptr, button, BUTTON_PROCESSED);
     if (press == down)

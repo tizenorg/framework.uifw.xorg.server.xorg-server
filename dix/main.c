@@ -262,7 +262,14 @@ main(int argc, char *argv[], char *envp[])
             InitRootWindow(screenInfo.screens[i]->root);
 
         InitCoreDevices();
+#ifdef _F_NO_INPUT_INIT_
+	if(!noInputInit)
+	{
+		InitInput(argc, argv);
+	}
+#else
         InitInput(argc, argv);
+#endif
         InitAndStartDevices();
         ReserveClientIds(serverClient);
 

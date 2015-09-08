@@ -212,4 +212,7 @@
 #define _XSERVER64 1
 #endif
 
+/* Support HWC extension */
+#undef HWC
+
 #endif /* _XORG_SERVER_H_ */

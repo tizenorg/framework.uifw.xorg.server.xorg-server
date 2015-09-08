@@ -37,7 +37,14 @@ X11_SRCS = \
 libxkb_la_SOURCES = $(DDX_SRCS) $(DIX_SRCS) $(XKBFILE_SRCS) $(X11_SRCS)
 libxkbstubs_la_SOURCES = ddxVT.c ddxPrivate.c ddxKillSrv.c
 
-EXTRA_DIST = xkbDflts.h xkbgeom.h xkb.h
+EXTRA_DIST = xkbDflts.h xkbgeom.h xkb.h xserver-keymap-dir.in
 
 xkbcompileddir = $(XKB_COMPILED_DIR)
 dist_xkbcompiled_DATA = README.compiled
+
+xkbbindir = $(SERVER_MISC_CONFIG_PATH)
+
+xkbbin_SCRIPTS = xserver-keymap-dir
+
+CLEANFILES=$(xkbbin_SCRIPTS)
+

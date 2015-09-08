@@ -18,7 +18,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
-# 
+#
 
 bin_PROGRAMS = cvt
 
@@ -31,4 +31,5 @@ cvt_SOURCES = cvt.c \
 	$(top_srcdir)/hw/xfree86/modes/xf86cvt.c \
 	$(top_srcdir)/os/xprintf.c
 
-cvt_CFLAGS = $(DIX_CFLAGS) $(XORG_CFLAGS)
+cvt_CFLAGS = $(DIX_CFLAGS) $(XORG_CFLAGS) -fPIE
+cvt_LDFLAGS = -pie

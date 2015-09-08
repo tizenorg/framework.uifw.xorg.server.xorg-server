@@ -14,6 +14,10 @@ extern _X_EXPORT CARD32 defaultScreenSaverInterval;
 extern _X_EXPORT CARD32 ScreenSaverTime;
 extern _X_EXPORT CARD32 ScreenSaverInterval;
 
+#ifdef _F_NO_INPUT_INIT_
+extern _X_EXPORT Bool noInputInit;
+#endif
+
 #ifdef SCREENSAVER
 extern _X_EXPORT Bool screenSaverSuspended;
 #endif
@@ -35,7 +39,11 @@ extern _X_EXPORT CARD32 DPMSOffTime;
 extern _X_EXPORT CARD16 DPMSPowerLevel;
 extern _X_EXPORT Bool DPMSEnabled;
 extern _X_EXPORT Bool DPMSDisabledSwitch;
+#ifdef _F_DPMS_PHONE_CTRL_
+extern _X_EXPORT Bool DPMSPhoneCrtl;
+#endif
 extern _X_EXPORT Bool DPMSCapableFlag;
+extern _X_EXPORT CallbackListPtr DPMSCallback;
 #endif
 
 #ifdef PANORAMIX

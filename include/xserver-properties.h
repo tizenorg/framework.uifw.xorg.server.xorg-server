@@ -119,6 +119,10 @@
 #define AXIS_LABEL_PROP_ABS_MT_TRACKING_ID "Abs MT Tracking ID"
 #define AXIS_LABEL_PROP_ABS_MT_PRESSURE    "Abs MT Pressure"
 #define AXIS_LABEL_PROP_ABS_MISC        "Abs Misc"
+#define AXIS_LABEL_PROP_ABS_MT_SLOT "Abs MT Slot"
+#define AXIS_LABEL_PROP_ABS_MT_DISTANCE "Abs MT Distance"
+#define AXIS_LABEL_PROP_ABS_MT_ANGLE "Abs MT Angle/MT Component"
+#define AXIS_LABEL_PROP_ABS_MT_PALM "Abs MT Palm/MT Sumsize"
 
 /* Button names */
 #define BTN_LABEL_PROP "Button Labels"

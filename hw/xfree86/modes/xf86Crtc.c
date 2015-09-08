@@ -728,8 +728,6 @@ xf86CrtcCloseScreen(ScreenPtr screen)
 
     xf86RandR12CloseScreen(screen);
 
-    free(config->name);
-
     screen->CloseScreen(screen);
 
     for (o = 0; o < config->num_output; o++) {
@@ -2846,11 +2844,20 @@ xf86SaveScreen(ScreenPtr pScreen, int mode)
 {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
 
+#ifdef _F_DPMS_PHONE_CTRL_
+    if (!DPMSPhoneCrtl) {
+        if (xf86IsUnblank(mode))
+            xf86DPMSSet(pScrn, DPMSModeOn, 0);
+        else
+            xf86DPMSSet(pScrn, DPMSModeOff, 0);
+	}
+#else
     if (xf86IsUnblank(mode))
         xf86DPMSSet(pScrn, DPMSModeOn, 0);
     else
         xf86DPMSSet(pScrn, DPMSModeOff, 0);
 
+#endif
     return TRUE;
 }
 

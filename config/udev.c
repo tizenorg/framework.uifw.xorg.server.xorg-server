@@ -321,7 +321,9 @@ wakeup_handler(pointer data, int err, pointer read_mask)
         action = udev_device_get_action(udev_device);
         if (action) {
             if (!strcmp(action, "add") || !strcmp(action, "change")) {
+#ifndef _F_NOT_TO_REMOVE_DEVICE_BY_UDEV_ADD_EVENT_
                 device_removed(udev_device);
+#endif
                 device_added(udev_device);
             }
             else if (!strcmp(action, "remove"))
@@ -359,7 +361,7 @@ config_udev_pre_init(void)
 #endif
 
 #ifdef HAVE_UDEV_MONITOR_FILTER_ADD_MATCH_TAG
-    if (SeatId && strcmp(SeatId, "seat0"))
+    if (ServerIsNotSeat0())
         udev_monitor_filter_add_match_tag(udev_monitor, SeatId);
 #endif
     if (udev_monitor_enable_receiving(udev_monitor)) {
@@ -388,7 +390,7 @@ config_udev_init(void)
 #endif
 
 #ifdef HAVE_UDEV_ENUMERATE_ADD_MATCH_TAG
-    if (SeatId && strcmp(SeatId, "seat0"))
+    if (ServerIsNotSeat0())
         udev_enumerate_add_match_tag(enumerate, SeatId);
 #endif
 
@@ -474,6 +476,10 @@ config_udev_odev_probe(config_odev_probe_proc_ptr probe_callback)
 
     udev_enumerate_add_match_subsystem(enumerate, "drm");
     udev_enumerate_add_match_sysname(enumerate, "card[0-9]*");
+#ifdef HAVE_UDEV_ENUMERATE_ADD_MATCH_TAG
+    if (ServerIsNotSeat0())
+        udev_enumerate_add_match_tag(enumerate, SeatId);
+#endif
     udev_enumerate_scan_devices(enumerate);
     devices = udev_enumerate_get_list_entry(enumerate);
     udev_list_entry_foreach(device, devices) {

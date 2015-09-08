@@ -1,7 +1,7 @@
 Name:	    xorg-x11-server
 Summary:    X.Org X11 X server
-Version:    1.12.99.905
-Release:    1
+Version:    1.13.30
+Release:    3
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
@@ -40,6 +40,8 @@ BuildRequires:  pkgconfig(libudev)
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  libpciaccess-devel
 BuildRequires:  libgcrypt-devel
+BuildRequires:  xorg-x11-proto-hwc
+BuildRequires:  pkgconfig(libsystemd-daemon)
 
 
 %description
@@ -61,6 +63,7 @@ Common files shared among all X servers.
 Summary:    Xorg X server
 Group:      System/X11
 Requires:   xorg-x11-server-common = %{version}-%{release}
+Requires(post): sys-assert
 Provides:   xserver-xorg-core
 
 %description Xorg
@@ -100,8 +103,8 @@ drivers, input drivers, or other X modules should install this package.
 
 %build
 
-./autogen.sh
-%reconfigure \
+%autogen -i -v -f
+%configure \
 	--disable-strict-compilation \
 	--disable-static \
 	--disable-debug \
@@ -129,6 +132,7 @@ drivers, input drivers, or other X modules should install this package.
 	--enable-xf86vidmode \
 	--enable-xace \
 	--disable-xselinux \
+	--disable-xsmack \
 	--disable-xcsecurity \
 	--disable-xcalibrate \
 	--disable-tslib \
@@ -138,7 +142,7 @@ drivers, input drivers, or other X modules should install this package.
 	--disable-config-dbus \
 	--enable-config-udev \
 	--disable-config-hal \
-	--enable-xfree86-utils \
+	--disable-xfree86-utils \
 	--disable-xaa \
 	--disable-vgahw \
 	--disable-vbe \
@@ -163,24 +167,44 @@ drivers, input drivers, or other X modules should install this package.
 	--without-dtrace \
 	--with-extra-module-dir="/usr/lib/xorg/extra-modules" \
 	--with-os-vendor="SLP(Samsung Linux Platform)" \
-	--with-xkb-path=/usr/etc/X11/xkb \
-	--with-xkb-output=/usr/etc/X11/xkb \
+	--with-xkb-path=/etc/X11/xkb \
+	--with-xkb-output=/var/xkb \
 	--with-default-font-path="built-ins" \
 	--disable-install-setuid \
 	--with-sha1=libgcrypt \
 	--enable-gestures \
+	--enable-hwc \
+	--enable-ir \
+	--with-systemd-daemon \
 	CFLAGS="${CFLAGS} \
 		-Wall -g \
 		-D_F_UDEV_DEBUG_ \
+		-D_F_NOT_TO_REMOVE_DEVICE_BY_UDEV_ADD_EVENT_ \
 		-D_F_NO_GRABTIME_UPDATE_ \
 		-D_F_NO_CATCH_SIGNAL_ \
 		-D_F_CHECK_NULL_CLIENT_ \
 		-D_F_COMP_OVL_PATCH \
 		-D_F_PUT_ON_PIXMAP_ \
+		-D_F_GETSTILL_GET_STOP_REQUEST_ \
 		-D_F_IGNORE_MOVE_SPRITE_FOR_FLOATING_POINTER_ \
-                -D_F_NOT_ALWAYS_CREATE_FRONTBUFFER_ \
+		-D_F_NOT_ALWAYS_CREATE_FRONTBUFFER_ \
+		-D_F_DISABLE_SCALE_TO_DESKTOP_FOR_DIRECT_TOUCH_ \
 		-D_F_GESTURE_EXTENSION_ \
- 		" \
+		-D_F_DO_NULL_CHECK_AT_XKBFAKEDEVICEBUTTON_ \
+		-D_F_DRI2_SWAP_REGION_ \
+		-D_F_NO_DAMAGE_DESCENDANT_FOR_HWC_ \
+		-D_F_NOT_USE_SW_CURSOR_ \
+		-D_F_DPMS_PHONE_CTRL_ \
+		-D_F_DRI2_FIX_INVALIDATE \
+		-D_F_RETURN_IF_INPUT_REMAINS_IN_WAITFORSTH_ \
+		-D_F_NO_INPUT_INIT_ \
+		-D_F_EXCLUDE_NON_MASK_SELECTED_FD_FROM_MAXCLIENTS_ \
+		-D_F_HWC_EXTENSION_ \
+		-D_F_MIEQ_SPRITEINFO_NULL_CHECK_ \
+		-D_F_DO_NOT_COPY_IN_RESIZE_WINDOW \
+		-D_F_SET_XKB_DEFAULT_OPTIONS_FROM_CONFIGURE_ \
+		-D_F_INPUT_REDIRECTION_ \
+        " \
 	CPPFLAGS="${CPPFLAGS} "
 
 #excluded macros
@@ -193,6 +217,10 @@ make %{?jobs:-j%jobs}
 
 %install
 rm -rf %{buildroot}
+mkdir -p %{buildroot}/usr/share/license
+cp -af COPYING %{buildroot}/usr/share/license/xorg-x11-server-common
+cp -af COPYING %{buildroot}/usr/share/license/xorg-x11-server-Xorg
+
 %make_install
 
 rm -f %{buildroot}/usr/lib/xorg/modules/multimedia/*
@@ -203,7 +231,7 @@ rm -f %{buildroot}/usr/lib/xorg/modules/libxaa.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libwfb.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libxf8_16bpp.so
 
-rm -f %{buildroot}/usr/etc/X11/xkb/README.compiled
+rm -f %{buildroot}/var/xkb/README.compiled
 rm -f %{buildroot}/usr/share/X11/xorg.conf.d/10-evdev.conf
 rm -rf %{buildroot}/usr/share/man/*
 
@@ -241,23 +269,29 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %files common
+%manifest xorg-x11-server-common.manifest
+/usr/share/license/xorg-x11-server-common
 %defattr(-,root,root,-)
 %{_libdir}/xorg/protocol.txt
 
 %files Xorg
+%manifest xorg-x11-server-Xorg.manifest
+/usr/share/license/xorg-x11-server-Xorg
 %defattr(-,root,root,-)
 %{_bindir}/X
 %{_bindir}/Xorg
-%{_bindir}/gtf
-%{_bindir}/cvt
+#%{_bindir}/gtf
+#%{_bindir}/cvt
 %dir %{_libdir}/xorg
 %dir %{_libdir}/xorg/modules
-%dir %{_libdir}/xorg/modules/extensions
+#%dir %{_libdir}/xorg/modules/extensions
 #%{_libdir}/xorg/modules/extensions/libdri2.so
 #%{_libdir}/xorg/modules/extensions/libextmod.so
 #%{_libdir}/xorg/modules/extensions/librecord.so
-%dir %{_libdir}/xorg/modules/multimedia
+#%dir %{_libdir}/xorg/modules/multimedia
 %{_libdir}/xorg/modules/*.so
+%{_libdir}/xorg/xserver-keymap-dir
+%dir /var/xkb
 
 %files devel
 %defattr(-,root,root,-)

@@ -26,9 +26,9 @@ dnl
 dnl Process this file with autoconf to create configure.
 
 AC_PREREQ(2.60)
-AC_INIT([xorg-server], 1.12.99.905, [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg], xorg-server)
-RELEASE_DATE="2012-08-21"
-RELEASE_NAME="Splashing Orca"
+AC_INIT([xorg-server], 1.13.0, [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg], xorg-server)
+RELEASE_DATE="2012-09-05"
+RELEASE_NAME="Iced Tea"
 AC_CONFIG_SRCDIR([Makefile.am])
 AM_INIT_AUTOMAKE([foreign dist-bzip2])
 AM_MAINTAINER_MODE
@@ -137,6 +137,7 @@ AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h dlfcn.h stropts.h fnmatch.h
 
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
+AC_C_TYPEOF
 AC_C_BIGENDIAN([ENDIAN="X_BIG_ENDIAN"], [ENDIAN="X_LITTLE_ENDIAN"])
 
 AC_CHECK_SIZEOF([unsigned long])
@@ -514,20 +515,24 @@ AC_ARG_WITH(default-font-path, AS_HELP_STRING([--with-default-font-path=PATH], [
 AC_MSG_CHECKING([for default font path])
 AC_MSG_RESULT([$FONTPATH])
 
+AC_ARG_ENABLE(ir,             AS_HELP_STRING([--enable-ir], [Build Xorg with input redirection support (default: disabled)]), [IR=$enableval],[IR=no])
 AC_ARG_WITH(xkb-path,         AS_HELP_STRING([--with-xkb-path=PATH], [Path to XKB base dir (default: ${datadir}/X11/xkb)]),
 				[ XKBPATH="$withval" ],
 				[ XKBPATH="${datadir}/X11/xkb" ])
 AC_ARG_WITH(xkb-output,       AS_HELP_STRING([--with-xkb-output=PATH], [Path to XKB output dir (default: ${datadir}/X11/xkb/compiled)]),
 				[ XKBOUTPUT="$withval" ],
 				[ XKBOUTPUT="compiled" ])
+AC_ARG_ENABLE(xkb-cache,      AS_HELP_STRING([--disable-xkb-cache],
+				[Cache xkbcomp output when possible (default: enabled)]),
+				[XKBCACHE=$enableval], [XKBCACHE=yes])
 AC_ARG_WITH(default-xkb-rules, AS_HELP_STRING([--with-default-xkb-rules=RULES],
                                    [Keyboard ruleset (default: base/evdev)]),
                                 [ XKB_DFLT_RULES="$withval" ],
                                 [ XKB_DFLT_RULES="" ])
 AC_ARG_WITH(default-xkb-model, AS_HELP_STRING([--with-default-xkb-model=MODEL],
-                                   [Keyboard model (default: pc105)]),
+                                   [Keyboard model (default: evdev)]),
                                 [ XKB_DFLT_MODEL="$withval" ],
-                                [ XKB_DFLT_MODEL="pc105" ])
+                                [ XKB_DFLT_MODEL="evdev" ])
 AC_ARG_WITH(default-xkb-layout, AS_HELP_STRING([--with-default-xkb-layout=LAYOUT],
                                    [Keyboard layout (default: us)]),
                                 [ XKB_DFLT_LAYOUT="$withval" ],
@@ -595,6 +600,7 @@ dnl Extensions.
 AC_ARG_ENABLE(registry,       AS_HELP_STRING([--disable-registry], [Build string registry module (default: enabled)]), [XREGISTRY=$enableval], [XREGISTRY=yes])
 AC_ARG_ENABLE(composite,      AS_HELP_STRING([--disable-composite], [Build Composite extension (default: enabled)]), [COMPOSITE=$enableval], [COMPOSITE=yes])
 AC_ARG_ENABLE(gesture,	      AS_HELP_STRING([--disable-gesture], [Build Gesture extension (default: enabled)]), [GESTURE=$enableval], [GESTURE=yes])
+AC_ARG_ENABLE(hwc,	      AS_HELP_STRING([--disable-hwc], [Build HWC extension (default: enabled)]), [HWC=$enableval], [HWC=yes])
 AC_ARG_ENABLE(mitshm,         AS_HELP_STRING([--disable-mitshm], [Build SHM extension (default: auto)]), [MITSHM=$enableval], [MITSHM=auto])
 AC_ARG_ENABLE(xres,           AS_HELP_STRING([--disable-xres], [Build XRes extension (default: enabled)]), [RES=$enableval], [RES=yes])
 AC_ARG_ENABLE(record,         AS_HELP_STRING([--disable-record], [Build Record extension (default: enabled)]), [RECORD=$enableval], [RECORD=yes])
@@ -611,6 +617,7 @@ AC_ARG_ENABLE(xinerama,	      AS_HELP_STRING([--disable-xinerama], [Build Xinera
 AC_ARG_ENABLE(xf86vidmode,    AS_HELP_STRING([--disable-xf86vidmode], [Build XF86VidMode extension (default: auto)]), [XF86VIDMODE=$enableval], [XF86VIDMODE=auto])
 AC_ARG_ENABLE(xace,           AS_HELP_STRING([--disable-xace], [Build X-ACE extension (default: enabled)]), [XACE=$enableval], [XACE=yes])
 AC_ARG_ENABLE(xselinux,       AS_HELP_STRING([--enable-xselinux], [Build SELinux extension (default: disabled)]), [XSELINUX=$enableval], [XSELINUX=no])
+AC_ARG_ENABLE(xsmack,         AS_HELP_STRING([--enable-xsmack], [Build SMACK extension (default: disabled)]), [XSMACK=$enableval], [XSMACK=no])
 AC_ARG_ENABLE(xcsecurity,     AS_HELP_STRING([--enable-xcsecurity], [Build Security extension (default: disabled)]), [XCSECURITY=$enableval], [XCSECURITY=no])
 AC_ARG_ENABLE(tslib,          AS_HELP_STRING([--enable-tslib], [Build kdrive tslib touchscreen support (default: disabled)]), [TSLIB=$enableval], [TSLIB=no])
 AC_ARG_ENABLE(dbe,            AS_HELP_STRING([--disable-dbe], [Build DBE extension (default: enabled)]), [DBE=$enableval], [DBE=yes])
@@ -771,6 +778,7 @@ dnl Optional modules
 VIDEOPROTO="videoproto"
 COMPOSITEPROTO="compositeproto >= 0.4"
 GESTUREPROTO="gestureproto >= 0.1.0"
+HWCPROTO="hwcproto >= 0.1.0"
 RECORDPROTO="recordproto >= 1.13.99.1"
 SCRNSAVERPROTO="scrnsaverproto >= 1.1"
 RESOURCEPROTO="resourceproto >= 1.2.0"
@@ -826,6 +834,26 @@ SDK_REQUIRED_MODULES="$XPROTO $RANDRPROTO $RENDERPROTO $XEXTPROTO $INPUTPROTO $K
 AC_SUBST(SDK_REQUIRED_MODULES)
 
 REQUIRED_MODULES="$FIXESPROTO $DAMAGEPROTO $XCMISCPROTO $XTRANS $BIGREQSPROTO $SDK_REQUIRED_MODULES"
+
+dnl systemd socket activation
+dnl activate the code in libxtrans that grabs systemd's socket fds
+AC_ARG_WITH([systemd-daemon],
+	AS_HELP_STRING([--with-systemd-daemon],
+		[support systemd socket activation (default: auto)]),
+	[WITH_SYSTEMD_DAEMON=$withval], [WITH_SYSTEMD_DAEMON=auto])
+PKG_CHECK_MODULES([SYSTEMD_DAEMON], [libsystemd-daemon], [HAVE_SYSTEMD_DAEMON=yes],
+		[HAVE_SYSTEMD_DAEMON=no])
+if test "x$WITH_SYSTEMD_DAEMON" = xauto; then
+	WITH_SYSTEMD_DAEMON="$HAVE_SYSTEMD_DAEMON"
+fi
+if test "x$WITH_SYSTEMD_DAEMON" = xyes; then
+	if "x$HAVE_SYSTEMD_DAEMON" = xno; then
+		AC_MSG_ERROR([systemd support requested but no library has been found])
+	fi
+	AC_DEFINE(HAVE_SYSTEMD_DAEMON, 1, [Define if libsystemd-daemon is available])
+	REQUIRED_LIBS="$REQUIRED_LIBS libsystemd-daemon"
+fi
+AM_CONDITIONAL([HAVE_SYSTEMD_DAEMON], [test "x$HAVE_SYSTEMD_DAEMON" = "xyes"])
 
 if test "x$CONFIG_UDEV" = xyes &&
  { test "x$CONFIG_DBUS_API" = xyes || test "x$CONFIG_HAL" = xyes; }; then
@@ -1006,8 +1034,18 @@ AM_CONDITIONAL(GESTURE, [test "x$GESTURE" = xyes])
 if test "x$GESTURE" = xyes; then
 	AC_DEFINE(GESTURE, 1, [Support Gesture Extension])
 	REQUIRED_MODULES="$REQUIRED_MODULES $GESTUREPROTO"
+	SDK_REQUIRED_MODULES="$SDK_REQUIRED_MODULES $GESTUREPROTO"
 	GESTURE_LIB='$(top_builddir)/gesture/libgesture.la'
 	GESTURE_INC='-I$(top_srcdir)/gesture'
+fi
+
+AM_CONDITIONAL(HWC, [test "x$HWC" = xyes])
+if test "x$HWC" = xyes; then
+	AC_DEFINE(HWC, 1, [Support HWC Extension])
+	REQUIRED_MODULES="$REQUIRED_MODULES $HWCPROTO"
+	SDK_REQUIRED_MODULES="$SDK_REQUIRED_MODULES $HWCPROTO"
+	HWC_LIB='$(top_builddir)/hwc/libhwc.la'
+	HWC_INC='-I$(top_srcdir)/hwc'
 fi
 
 AM_CONDITIONAL(COMPOSITE, [test "x$COMPOSITE" = xyes])
@@ -1093,6 +1131,12 @@ fi
 AC_SUBST([GLX_DEFINES])
 AC_SUBST([GLX_SYS_LIBS])
 
+#AM_CONDITIONAL(IR, test "x$IR" = xyes)
+if test "x$IR" = xyes; then
+	IR_CFLAGS="-D_F_INPUT_REDIRECTION_"
+	AC_SUBST(IR_CFLAGS)
+fi
+
 AM_CONDITIONAL(DRI, test "x$DRI" = xyes)
 if test "x$DRI" = xyes; then
 	AC_DEFINE(XF86DRI, 1, [Build DRI extension])
@@ -1168,6 +1212,15 @@ if test "x$XSELINUX" = xyes; then
 	AC_DEFINE(XSELINUX, 1, [Build SELinux extension])
 fi
 
+AM_CONDITIONAL(XSMACK, [test "x$XSMACK" = xyes])
+if test "x$XSMACK" = xyes; then
+	if test "x$XACE" != xyes; then
+		AC_MSG_ERROR([cannot build Smack extension without X-ACE])
+	fi
+	SMACK_LIBS="$SMACK_LIBS -lsmack"
+	AC_DEFINE(XSMACK, 1, [Build Smack extension])
+fi
+
 AM_CONDITIONAL(XCSECURITY, [test "x$XCSECURITY" = xyes])
 if test "x$XCSECURITY" = xyes; then
 	if test "x$XACE" != xyes; then
@@ -1236,6 +1289,11 @@ dnl Make sure XKM_OUTPUT_DIR is an absolute path
 XKBOUTPUT_FIRSTCHAR=`echo $XKBOUTPUT | cut -b 1`
 if [[ x$XKBOUTPUT_FIRSTCHAR != x/ -a x$XKBOUTPUT_FIRSTCHAR != 'x$' ]] ; then
    XKBOUTPUT="$XKB_BASE_DIRECTORY/$XKBOUTPUT"
+fi
+
+echo "XKBCACHE is $XKBCACHE"
+if test "x$XKBCACHE" = xyes; then
+	AC_DEFINE(XKM_CACHE_FILES, 1, [Cache xkbcomp output files])
 fi
 
 dnl XKM_OUTPUT_DIR (used in code) must end in / or file names get hosed
@@ -1552,7 +1610,7 @@ AC_EGREP_CPP([I_AM_SVR4],[
 AC_DEFINE([SVR4],1,[Define to 1 on systems derived from System V Release 4])
 AC_MSG_RESULT([yes])], AC_MSG_RESULT([no]))
 
-XSERVER_CFLAGS="$XSERVER_CFLAGS $CORE_INCS $XEXT_INC $GESTURE_INC $COMPOSITE_INC $DAMAGE_INC $FIXES_INC $XI_INC $MI_INC $MIEXT_SYNC_INC $MIEXT_SHADOW_INC $MIEXT_LAYER_INC $MIEXT_DAMAGE_INC $RENDER_INC $RANDR_INC $FB_INC $DBE_INC"
+XSERVER_CFLAGS="$XSERVER_CFLAGS $CORE_INCS $XEXT_INC $GESTURE_INC $HWC_INC $COMPOSITE_INC $DAMAGE_INC $FIXES_INC $XI_INC $MI_INC $MIEXT_SYNC_INC $MIEXT_SHADOW_INC $MIEXT_LAYER_INC $MIEXT_DAMAGE_INC $RENDER_INC $RANDR_INC $FB_INC $DBE_INC"
 
 dnl ---------------------------------------------------------------------------
 dnl DDX section.
@@ -1611,7 +1669,7 @@ if test "x$XORG" = xyes; then
 	XORG_OSINCS='-I$(top_srcdir)/hw/xfree86/os-support -I$(top_srcdir)/hw/xfree86/os-support/bus -I$(top_srcdir)/os'
 	XORG_INCS="$XORG_DDXINCS $XORG_OSINCS"
 	XORG_CFLAGS="$XORGSERVER_CFLAGS -DHAVE_XORG_CONFIG_H"
-	XORG_LIBS="$GESTURE_LIB $COMPOSITE_LIB $FIXES_LIB $XEXT_LIB $DBE_LIB $RECORD_LIB $RANDR_LIB $RENDER_LIB $DAMAGE_LIB $MIEXT_SYNC_LIB $MIEXT_DAMAGE_LIB $XI_LIB $XKB_LIB"
+	XORG_LIBS="$GESTURE_LIB $HWC_LIB $COMPOSITE_LIB $FIXES_LIB $XEXT_LIB $DBE_LIB $RECORD_LIB $RANDR_LIB $RENDER_LIB $DAMAGE_LIB $MIEXT_SYNC_LIB $MIEXT_DAMAGE_LIB $XI_LIB $XKB_LIB"
 
 	dnl ==================================================================
 	dnl symbol visibility
@@ -2219,6 +2277,7 @@ Makefile
 glx/Makefile
 include/Makefile
 gesture/Makefile
+hwc/Makefile
 composite/Makefile
 damageext/Makefile
 dbe/Makefile
@@ -2239,6 +2298,7 @@ os/Makefile
 randr/Makefile
 render/Makefile
 xkb/Makefile
+xkb/xserver-keymap-dir
 Xext/Makefile
 Xi/Makefile
 xfixes/Makefile
@@ -2314,4 +2374,4 @@ test/Makefile
 test/xi2/Makefile
 xserver.ent
 xorg-server.pc
-])
+], [chmod +x xkb/xserver-keymap-dir])

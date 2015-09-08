@@ -1,0 +1,23 @@
+#
+# Minimal Xorg service file - launches Xorg as a service unit
+#
+
+# The Xorg server is started on demand by systemd when the first client
+# attempts to connect to one of its sockets. With X started automatically
+# you need not to specify dependencis on this service or xorg.target
+# whatsoever. Keep in mind however that you need to make sure all services
+# using X have their $DISPLAY environment variable set properly.
+
+[Unit]
+Description=Xorg server
+Wants=xorg.target
+Before=xorg.target
+
+[Service]
+EnvironmentFile=-/etc/sysconfig/xorg
+Environment=DISPLAY=:0
+Type=simple
+OOMScoreAdjust=-1000
+ExecStart=/usr/bin/Xorg $DISPLAY $OPTIONS $XORG_CONF
+Restart=always
+RestartSec=10

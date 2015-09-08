@@ -58,6 +58,7 @@ static int eventToDeviceChanged(DeviceChangedEvent *ev, xEvent **dcce);
 static int eventToDeviceEvent(DeviceEvent *ev, xEvent **xi);
 static int eventToRawEvent(RawDeviceEvent *ev, xEvent **xi);
 static int eventToTouchOwnershipEvent(TouchOwnershipEvent *ev, xEvent **xi);
+static int eventToTouchCancelEvent(TouchCancelEvent *ev, xEvent **xi);
 
 /* Do not use, read comments below */
 BOOL EventIsKeyRepeat(xEvent *event);
@@ -160,6 +161,7 @@ EventToCore(InternalEvent *event, xEvent **core_out, int *count_out)
     case ET_TouchUpdate:
     case ET_TouchEnd:
     case ET_TouchOwnership:
+    case ET_TouchCancel:
         ret = BadMatch;
         break;
     default:
@@ -216,6 +218,7 @@ EventToXI(InternalEvent *ev, xEvent **xi, int *count)
     case ET_TouchUpdate:
     case ET_TouchEnd:
     case ET_TouchOwnership:
+    case ET_TouchCancel:
         *count = 0;
         *xi = NULL;
         return BadMatch;
@@ -262,6 +265,8 @@ EventToXI2(InternalEvent *ev, xEvent **xi)
         return eventToDeviceEvent(&ev->device_event, xi);
     case ET_TouchOwnership:
         return eventToTouchOwnershipEvent(&ev->touch_ownership_event, xi);
+    case ET_TouchCancel:
+        return eventToTouchCancelEvent(&ev->touch_cancel_event, xi);
     case ET_ProximityIn:
     case ET_ProximityOut:
         *xi = NULL;
@@ -739,6 +744,26 @@ eventToTouchOwnershipEvent(TouchOwnershipEvent *ev, xEvent **xi)
 }
 
 static int
+eventToTouchCancelEvent(TouchCancelEvent *ev, xEvent **xi)
+{
+    int len = sizeof(xXITouchCancelEvent);
+    xXITouchCancelEvent *xtce;
+
+    *xi = calloc(1, len);
+    xtce = (xXITouchCancelEvent *) * xi;
+    xtce->type = GenericEvent;
+    xtce->extension = IReqCode;
+    xtce->length = bytes_to_int32(len - sizeof(xEvent));
+    xtce->evtype = GetXI2Type(ev->type);
+    xtce->deviceid = ev->deviceid;
+    xtce->time = ev->time;
+    xtce->sourceid = ev->sourceid;
+    xtce->flags = 0;            /* we don't have wire flags for cancel yet */
+
+    return Success;
+}
+
+static int
 eventToRawEvent(RawDeviceEvent *ev, xEvent **xi)
 {
     xXIRawEvent *raw;
@@ -929,8 +954,67 @@ GetXI2Type(enum EventType type)
     case ET_TouchOwnership:
         xi2type = XI_TouchOwnership;
         break;
+    case ET_TouchCancel:
+        xi2type = XI_TouchCancel;
+        break;
     default:
         break;
     }
     return xi2type;
 }
+
+#ifdef _F_INPUT_REDIRECTION_
+DeviceIntPtr GetDeviceInfoFromID(int devid)
+{
+    DeviceIntPtr dev;
+    if (devid <= 0)
+    {
+        ErrorF("[%s] invalid devid(%d)\n", __FUNCTION__, devid);
+        return NULL;
+    }
+
+    for( dev = inputInfo.pointer ; dev; dev = dev->next )
+    {
+        if (dev->id == devid)
+        {
+            return dev;
+        }
+    }
+    return NULL;
+}
+
+int GetValuatorIndexFromAtomName(DeviceIntPtr dev, char *aname)
+{
+    int index = -1;
+    Atom val_atom;
+    int numAxes, i;
+
+    if (!dev || !dev->valuator ||!aname)
+    {
+        ErrorF("[%s]Invalid dev or atom name\n", __FUNCTION__);
+        return index;
+    }
+
+    numAxes = dev->valuator->numAxes;
+    val_atom = XIGetKnownProperty(aname);
+
+    if (!numAxes || !val_atom)
+    {
+        ErrorF("[%s] %d device doesn't support %s valuator\n", __FUNCTION__, dev->id, aname);
+        return index;
+    }
+
+    for (i=0; i<numAxes; i++)
+    {
+        AxisInfoPtr axes = &dev->valuator->axes[i];
+        if (!axes || (axes->mode != Absolute))
+                continue;
+        if (axes->label == val_atom)
+        {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+#endif //_F_INPUT_REDIRECTION_

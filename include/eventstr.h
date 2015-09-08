@@ -72,6 +72,7 @@ enum EventType {
     ET_RawTouchUpdate,
     ET_RawTouchEnd,
     ET_XQuartz,
+    ET_TouchCancel = 31,
 #ifdef _F_GESTURE_EXTENSION_
     ET_MTSync = 0x7E,
 #endif//_F_GESTURE_EXTENSION_
@@ -143,6 +144,18 @@ struct _TouchOwnershipEvent {
     uint32_t resource;    /**< Provoking grab or event selection */
     uint32_t flags;       /**< Flags to be copied into the generated event */
 };
+
+struct _TouchCancelEvent {
+    unsigned char header; /**< Always ET_Internal */
+    enum EventType type;  /**< ET_TouchOwnership */
+    int length;           /**< Length in bytes */
+    Time time;            /**< Time in ms */
+    int deviceid;         /**< Device to post this event for */
+    int sourceid;         /**< The physical source device */
+    uint32_t resource;    /**< Provoking grab or event selection */
+    uint32_t flags;       /**< Flags to be copied into the generated event */
+};
+
 
 /* Flags used in DeviceChangedEvent to signal if the slave has changed */
 #define DEVCHANGE_SLAVE_SWITCH 0x2
@@ -263,6 +276,7 @@ union _InternalEvent {
 #ifdef XQUARTZ
     XQuartzEvent xquartz_event;
 #endif
+    TouchCancelEvent touch_cancel_event;
 };
 
 #endif

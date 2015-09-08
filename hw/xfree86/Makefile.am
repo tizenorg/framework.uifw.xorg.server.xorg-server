@@ -38,7 +38,7 @@ DIST_SUBDIRS = common ddc i2c x86emu int10 fbdevhw os-support \
 bin_PROGRAMS = Xorg
 nodist_Xorg_SOURCES = sdksyms.c
 
-AM_CFLAGS = $(DIX_CFLAGS) @XORG_CFLAGS@
+AM_CFLAGS = $(DIX_CFLAGS) @XORG_CFLAGS@ -fPIE
 INCLUDES = $(XORG_INCS) -I$(srcdir)/parser -I$(top_srcdir)/miext/cw \
 	-I$(srcdir)/ddc -I$(srcdir)/i2c -I$(srcdir)/modes -I$(srcdir)/ramdac \
 	-I$(srcdir)/dri -I$(srcdir)/dri2
@@ -59,6 +59,7 @@ LOCAL_LIBS = \
             dixmods/libxorgxkb.la \
             $(DRI_LIB) \
             $(DRI2_LIB) \
+            $(top_builddir)/hwc/libhwc.la \
             $(top_builddir)/mi/libmi.la \
             $(top_builddir)/os/libos.la
 Xorg_LDADD = \
@@ -67,7 +68,7 @@ Xorg_LDADD = \
             $(XSERVER_SYS_LIBS)
 Xorg_DEPENDENCIES = $(LOCAL_LIBS)
 
-Xorg_LDFLAGS = $(LD_EXPORT_SYMBOLS_FLAG)
+Xorg_LDFLAGS = $(LD_EXPORT_SYMBOLS_FLAG) -pie
 
 BUILT_SOURCES = xorg.conf.example
 DISTCLEANFILES = xorg.conf.example

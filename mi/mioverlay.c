@@ -1373,7 +1373,7 @@ miOverlayResizeWindow(WindowPtr pWin,
             }
 
             /* and move those bits */
-
+#ifndef _F_DO_NOT_COPY_IN_RESIZE_WINDOW
             if (oldpt.x != x || oldpt.y != y) {
                 if (gravitate2[g]) {
                     pPriv->copyUnderlay = TRUE;
@@ -1384,6 +1384,7 @@ miOverlayResizeWindow(WindowPtr pWin,
                     (*pScreen->CopyWindow) (pWin, oldpt, gravitate[g]);
                 }
             }
+#endif
 
             /* remove any overwritten bits from the remaining useful bits */
 

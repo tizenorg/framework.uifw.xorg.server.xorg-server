@@ -115,6 +115,10 @@ extern _X_EXPORT Bool noScreenSaverExtension;
 extern void ScreenSaverExtensionInit(void);
 #endif
 
+#ifdef _F_GESTURE_EXTENSION_
+extern _X_EXPORT Bool GestureExtensionInit(void);
+#endif//_F_GESTURE_EXTENSION_
+
 #include <X11/extensions/shapeproto.h>
 extern void ShapeExtensionInit(void);
 
@@ -163,6 +167,12 @@ extern _X_EXPORT Bool noSELinuxExtension;
 extern void SELinuxExtensionInit(void);
 #endif
 
+#if defined(XSMACK)
+#include "xsmack.h"
+extern _X_EXPORT Bool noSmackExtension;
+extern void SmackExtensionInit(void);
+#endif
+
 #ifdef XTEST
 #include <X11/extensions/xtestconst.h>
 #include <X11/extensions/xtestproto.h>
@@ -180,6 +190,12 @@ extern void PseudoramiXExtensionInit(void);
 extern _X_EXPORT Bool noXvExtension;
 extern void XvExtensionInit(void);
 extern void XvMCExtensionInit(void);
+#endif
+
+#if defined(HWC)
+#include <X11/extensions/hwctokens.h>
+#include <X11/extensions/hwcproto.h>
+extern void hwc_extension_init(void);
 #endif
 
 #endif

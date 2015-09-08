@@ -43,6 +43,8 @@
 void
 xf86VTRequest(int sig)
 {
+    xf86DrvMsg(0, X_INFO, "%s : signal=%d\n", __func__, sig);
+
     signal(sig, (void (*)(int)) xf86VTRequest);
     xf86Info.vtRequestsPending = TRUE;
     return;
@@ -57,30 +59,51 @@ xf86VTSwitchPending(void)
 Bool
 xf86VTSwitchAway(void)
 {
+    xf86DrvMsg(0, X_INFO, "%s : \n", __func__);
+
     xf86Info.vtRequestsPending = FALSE;
     if (ioctl(xf86Info.consoleFd, VT_RELDISP, 1) < 0)
+    {
+        xf86DrvMsg(0, X_WARNING, "%s : fail to release vt (ioctl(xf86Info.consoleFd, VT_RELDISP, 1))\n", __func__);
         return FALSE;
+    }
     else
+    {
+        xf86DrvMsg(0, X_WARNING, "%s : succeed to release vt (ioctl(xf86Info.consoleFd, VT_RELDISP, 1))\n", __func__);
         return TRUE;
+    }
 }
 
 Bool
 xf86VTSwitchTo(void)
 {
+    xf86DrvMsg(0, X_INFO, "%s : \n", __func__);
+
     xf86Info.vtRequestsPending = FALSE;
     if (ioctl(xf86Info.consoleFd, VT_RELDISP, VT_ACKACQ) < 0)
+    {
+        xf86DrvMsg(0, X_WARNING, "%s : fail to release vt (ioctl(xf86Info.consoleFd, VT_RELDISP, VT_ACKACQ))\n", __func__);
         return FALSE;
+    }
     else
+    {
+        xf86DrvMsg(0, X_WARNING, "%s : succeed to release vt (ioctl(xf86Info.consoleFd, VT_RELDISP, VT_ACKACQ))\n", __func__);
         return TRUE;
+    }
 }
 
 Bool
 xf86VTActivate(int vtno)
 {
+    xf86DrvMsg(0, X_INFO, "%s : vtno=%d\n", __func__, vtno);
 #ifdef VT_ACTIVATE
     if (ioctl(xf86Info.consoleFd, VT_ACTIVATE, vtno) < 0) {
+        xf86DrvMsg(0, X_WARNING, "%s : fail to release vt (ioctl(xf86Info.consoleFd, VT_ACTIVATE, %d))\n", __func__, vtno);
         return FALSE;
     }
 #endif
+
+    xf86DrvMsg(0, X_WARNING, "%s : succeed to release vt (ioctl(xf86Info.consoleFd, VT_ACTIVATE, %d))\n", __func__, vtno);
+
     return TRUE;
 }

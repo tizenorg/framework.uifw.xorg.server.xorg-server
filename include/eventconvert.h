@@ -30,6 +30,12 @@
 #include "eventstr.h"
 
 #define FP1616(integral, frac) ((integral) * (1 << 16) + (frac) * (1 << 16))
+#ifdef _F_INPUT_REDIRECTION_
+#define AXIS_LABEL_PROP_ABS_X           "Abs X"
+#define AXIS_LABEL_PROP_ABS_Y           "Abs Y"
+#define AXIS_LABEL_PROP_ABS_MT_POSITION_X  "Abs MT Position X"
+#define AXIS_LABEL_PROP_ABS_MT_POSITION_Y  "Abs MT Position Y"
+#endif //_F_INPUT_REDIRECTION_
 
 _X_EXPORT int EventToCore(InternalEvent *event, xEvent **core, int *count);
 _X_EXPORT int EventToXI(InternalEvent *ev, xEvent **xi, int *count);
@@ -37,5 +43,9 @@ _X_EXPORT int EventToXI2(InternalEvent *ev, xEvent **xi);
 _X_INTERNAL int GetCoreType(enum EventType type);
 _X_INTERNAL int GetXIType(enum EventType type);
 _X_INTERNAL int GetXI2Type(enum EventType type);
+#ifdef _F_INPUT_REDIRECTION_
+_X_INTERNAL DeviceIntPtr GetDeviceInfoFromID(int devid);
+_X_INTERNAL int GetValuatorIndexFromAtomName(DeviceIntPtr dev, char *aname);
+#endif //_F_INPUT_REDIRECTION_
 
 #endif                          /* _EVENTCONVERT_H_ */

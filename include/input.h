@@ -553,6 +553,8 @@ extern TouchPointInfoPtr TouchBeginTouch(DeviceIntPtr dev, int sourceid,
                                          Bool emulate_pointer);
 extern TouchPointInfoPtr TouchFindByClientID(DeviceIntPtr dev,
                                              uint32_t client_id);
+extern TouchPointInfoPtr TouchFindBySourceID(DeviceIntPtr dev,
+                                             uint32_t sourceid);
 extern void TouchEndTouch(DeviceIntPtr dev, TouchPointInfoPtr ti);
 extern Bool TouchEventHistoryAllocate(TouchPointInfoPtr ti);
 extern void TouchEventHistoryFree(TouchPointInfoPtr ti);
@@ -560,9 +562,9 @@ extern void TouchEventHistoryPush(TouchPointInfoPtr ti, const DeviceEvent *ev);
 extern void TouchEventHistoryReplay(TouchPointInfoPtr ti, DeviceIntPtr dev,
                                     XID resource);
 extern Bool TouchResourceIsOwner(TouchPointInfoPtr ti, XID resource);
-extern void TouchAddListener(TouchPointInfoPtr ti, XID resource,
+extern void TouchAddListener(TouchPointInfoPtr ti, XID resource, int resource_type,
                              enum InputLevel level, enum TouchListenerType type,
-                             enum TouchListenerState state, WindowPtr window);
+                             enum TouchListenerState state, WindowPtr window, GrabPtr grab);
 extern Bool TouchRemoveListener(TouchPointInfoPtr ti, XID resource);
 extern void TouchSetupListeners(DeviceIntPtr dev, TouchPointInfoPtr ti,
                                 InternalEvent *ev);

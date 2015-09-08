@@ -839,6 +839,22 @@ STouchOwnershipEvent(xXITouchOwnershipEvent * from, xXITouchOwnershipEvent * to)
     swapl(&to->child);
 }
 
+static void
+STouchCancelEvent(xXITouchCancelEvent * from, xXITouchCancelEvent * to)
+{
+    *to = *from;
+    swaps(&to->sequenceNumber);
+    swapl(&to->length);
+    swaps(&to->evtype);
+    swaps(&to->deviceid);
+    swapl(&to->time);
+    swaps(&to->sourceid);
+    swapl(&to->flags);
+    swapl(&to->root);
+    swapl(&to->event);
+    swapl(&to->child);
+}
+
 /** Event swapping function for XI2 events. */
 void
 XI2EventSwap(xGenericEvent *from, xGenericEvent *to)
@@ -874,6 +890,9 @@ XI2EventSwap(xGenericEvent *from, xGenericEvent *to)
     case XI_TouchOwnership:
         STouchOwnershipEvent((xXITouchOwnershipEvent *) from,
                              (xXITouchOwnershipEvent *) to);
+    case XI_TouchCancel:
+        STouchCancelEvent((xXITouchCancelEvent *) from,
+                             (xXITouchCancelEvent *) to);
         break;
     case XI_RawMotion:
     case XI_RawKeyPress:

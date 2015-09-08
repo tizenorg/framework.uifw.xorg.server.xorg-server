@@ -213,12 +213,25 @@ WaitForSomething(int *pClientsReady)
         /* keep this check close to select() call to minimize race */
         if (dispatchException)
             i = -1;
+#ifdef _F_RETURN_IF_INPUT_REMAINS_IN_WAITFORSTH_
+        else if (*checkForInput[0] != *checkForInput[1]) {
+            return 0;
+        }
+#endif
         else if (AnyClientsWriteBlocked) {
             XFD_COPYSET(&ClientsWriteBlocked, &clientsWritable);
+#ifndef _F_EXCLUDE_NON_MASK_SELECTED_FD_FROM_MAXCLIENTS_
             i = Select(MaxClients, &LastSelectMask, &clientsWritable, NULL, wt);
+#else
+            i = Select(FD_SETSIZE, &LastSelectMask, &clientsWritable, NULL, wt);
+#endif
         }
         else {
+#ifndef _F_EXCLUDE_NON_MASK_SELECTED_FD_FROM_MAXCLIENTS_
             i = Select(MaxClients, &LastSelectMask, NULL, NULL, wt);
+#else
+            i = Select(FD_SETSIZE, &LastSelectMask, NULL, NULL, wt);
+#endif
         }
         selecterr = GetErrno();
         WakeupHandler(i, (pointer) &LastSelectMask);

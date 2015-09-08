@@ -790,3 +790,228 @@ compConfigNotify(WindowPtr pWin, int x, int y, int w, int h,
         return BadAlloc;
     return Success;
 }
+
+#ifdef _F_INPUT_REDIRECTION_
+static void
+print_matrix(char* name, pixman_transform_t* t)
+{
+        int i;
+        ErrorF("[%s] %s = \n", __FUNCTION__, name);
+        for(i=0; i<3; i++)
+        {
+                ErrorF("\t%5.2f  %5.2f  %5.2f\n"
+                        , pixman_fixed_to_double(t->matrix[i][0])
+                        , pixman_fixed_to_double(t->matrix[i][1])
+                        , pixman_fixed_to_double(t->matrix[i][2]));
+        }
+}
+Bool
+CompositeGetTransformPoint (WindowPtr pChild,
+                         int      x,
+                         int      y,
+                         int      *tx,
+                         int      *ty)
+{
+    CompWindowPtr cw = GetCompWindow (pChild);
+
+    if (cw && cw->pTransform)
+    {
+        PictVector v;
+        v.vector[0] = IntToxFixed(x);
+        v.vector[1] = IntToxFixed(y);
+        v.vector[2] = xFixed1;
+
+        if(pixman_transform_point(cw->pTransform, &v))
+        {
+            *tx = xFixedToInt(v.vector[0]);
+            *ty = xFixedToInt(v.vector[1]);
+            return TRUE;
+        }
+        else
+        {
+            ErrorF("[%s] Failed on pixman_transform_point()\n", __FUNCTION__);
+        }
+    }
+
+    *tx = x;
+    *ty = y;
+
+    /* There is no mesh, handle events like normal */
+    if (!cw || !cw->pTransform)
+       return TRUE;
+
+    return FALSE;
+}
+
+Bool
+CompositeGetInvTransformPoint (WindowPtr pChild,
+                         int      x,
+                         int      y,
+                         int      *tx,
+                         int      *ty)
+{
+    CompWindowPtr cw = GetCompWindow (pChild);
+
+    if (cw && cw->pInvTransform)
+    {
+        PictVector v;
+        v.vector[0] = IntToxFixed(x);
+        v.vector[1] = IntToxFixed(y);
+        v.vector[2] = xFixed1;
+
+        if(pixman_transform_point(cw->pInvTransform, &v))
+        {
+            *tx = xFixedToInt(v.vector[0]);
+            *ty = xFixedToInt(v.vector[1]);
+            return TRUE;
+        }
+        else
+        {
+            ErrorF("[%s] Failed on pixman_transform_point(cw->pInvTransform, &v)\n",__FUNCTION__);
+        }
+    }
+
+    *tx = x;
+    *ty = y;
+
+    /* There is no mesh, handle events like normal */
+    if (!cw || !cw->pInvTransform)
+    {
+       return TRUE;
+    }
+
+    return FALSE;
+}
+
+void
+CompositeXYScreenToWindowRootCoordinate (WindowPtr pWin,
+                                        int       x,
+                                        int       y,
+                                        int       *rootX,
+                                        int       *rootY)
+{
+    if (!pWin->parent)
+    {
+       *rootX = x;
+       *rootY = y;
+    }
+    else
+    {
+       CompositeXYScreenToWindowRootCoordinate (pWin->parent, x, y, &x, &y);
+       CompositeGetInvTransformPoint(pWin, x, y, rootX, rootY);
+    }
+}
+
+void
+CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
+                                          int       x,
+                                          int       y,
+                                          int       *screenX,
+                                          int       *screenY)
+{
+    if (!pWin->parent)
+    {
+       *screenX = x;
+       *screenY = y;
+    }
+    else
+    {
+       CompositeGetTransformPoint(pWin, x, y, &x, &y);
+       CompositeXYScreenFromWindowRootCoordinate (pWin->parent,
+                                                  x, y, screenX, screenY);
+    }
+}
+
+int
+CompositeSetCoordinateTransform (ClientPtr pClient,
+                                     WindowPtr pWin,
+                                     PictTransformPtr pTransform)
+{
+    CompSubwindowsPtr   csw = GetCompSubwindows (pWin->parent);
+    CompWindowPtr      cw = GetCompWindow (pWin);
+    CompClientWindowPtr        ccw;
+    PictTransform inv;
+
+    /*
+     * sub-window must be Manual update
+     */
+    if (!csw || csw->update != CompositeRedirectManual)
+    {
+        ErrorF("[%s] BadAccess : !csw || csw->update != CompositeRedirectManual\n", __FUNCTION__);
+        return BadAccess;
+    }
+
+    /*
+     * must be Manual update client
+     */
+    for (ccw = csw->clients; ccw; ccw = ccw->next)
+       if (ccw->update == CompositeRedirectManual &&
+           CLIENT_ID (ccw->id) != pClient->index)
+       {
+           ErrorF("[%s] BadAccess : CLIENT_ID (ccw->id) != pClient->index\n", __FUNCTION__);
+           return BadAccess;
+       }
+
+    if (pTransform && pixman_transform_is_identity(pTransform))
+    {
+        ErrorF("[%s] pTransform=0 : pTransform && pixman_transform_is_identity(pTransform)\n", __FUNCTION__);
+        pTransform = 0;
+    }
+
+    if(pTransform && pTransform->matrix)
+        print_matrix("pTransform", pTransform);
+    else
+        ErrorF("[%s] pTransform or pTransform->matrix is NULL !\n", __FUNCTION__);
+
+    if(pTransform && !pixman_transform_invert(&inv, pTransform))
+    {
+        ErrorF("[%s] BadRequest : !pixman_transform_invert(&inv, pTransform)\n", __FUNCTION__);
+        return BadRequest;
+    }
+
+    if (pTransform)
+    {
+       if (!cw->pTransform)
+       {
+           cw->pTransform = (PictTransform *) xalloc (sizeof (PictTransform));
+           if (!cw->pTransform)
+           {
+               ErrorF("[%s] BadAlloc : !cw->pTransform\n", __FUNCTION__);
+               return BadAlloc;
+           }
+       }
+
+       if (!cw->pInvTransform)
+       {
+           cw->pInvTransform = (PictTransform *) xalloc (sizeof (PictTransform));
+           if (!cw->pInvTransform)
+           {
+               ErrorF("[%s] BadAlloc : !cw->pInvTransform\n", __FUNCTION__);
+               return BadAlloc;
+           }
+       }
+
+       *cw->pTransform = *pTransform;
+       *cw->pInvTransform = inv;
+
+       print_matrix("CW:transform", cw->pTransform);
+       print_matrix("CW:inv transform", cw->pInvTransform);
+    }
+    else
+    {
+       if (cw->pTransform)
+       {
+           xfree (cw->pTransform);
+           cw->pTransform = 0;
+       }
+
+       if(cw->pInvTransform)
+       {
+           xfree(cw->pInvTransform);
+           cw->pInvTransform = 0;
+       }
+    }
+
+    return 0;
+}
+#endif //_F_INPUT_REDIRECTION_

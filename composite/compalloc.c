@@ -86,7 +86,11 @@ compReportDamage(DamagePtr pDamage, RegionPtr pRegion, void *closure)
     while (pWin) {
         if (pWin->damagedDescendants)
             break;
+#ifdef _F_NO_DAMAGE_DESCENDANT_FOR_HWC_
+        pWin->damagedDescendants = FALSE;
+#else
         pWin->damagedDescendants = TRUE;
+#endif
         pWin = pWin->parent;
     }
 }
@@ -193,6 +197,10 @@ compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
         cw->oldy = COMP_ORIGIN_INVALID;
         cw->damageRegistered = FALSE;
         cw->damaged = FALSE;
+#ifdef _F_INPUT_REDIRECTION_
+        cw->pTransform = NULL;
+        cw->pInvTransform = NULL;
+#endif //_F_INPUT_REDIRECTION_
         cw->pOldPixmap = NullPixmap;
         dixSetPrivate(&pWin->devPrivates, CompWindowPrivateKey, cw);
     }
@@ -591,7 +599,7 @@ compNewPixmap(WindowPtr pWin, int x, int y, int w, int h)
                                                serverClient, &error);
 
         if (pSrcPicture && pDstPicture) {
-            CompositePicture(PictOpSrc,
+            CompositePicture(PictOpClear,
                              pSrcPicture,
                              NULL,
                              pDstPicture,

@@ -1005,6 +1005,11 @@ xf86XVRemovePortFromWindow(WindowPtr pWin, XvPortRecPrivatePtr portPriv)
 {
     XF86XVWindowPtr winPriv, prevPriv = NULL;
 
+#ifdef _F_PUT_ON_PIXMAP_
+    if (pWin->drawable.type != DRAWABLE_WINDOW)
+        return;
+#endif
+
     winPriv = GET_XF86XV_WINDOW(pWin);
 
     while (winPriv) {
@@ -1469,8 +1474,10 @@ xf86XVPutStill(ClientPtr client,
     int ret = Success;
     Bool clippedAway = FALSE;
 
+#ifndef _F_PUT_ON_PIXMAP_
     if (pDraw->type != DRAWABLE_WINDOW)
         return BadAlloc;
+#endif
 
     if (!portPriv->pScrn->vtSema)
         return Success;         /* Success ? */
@@ -1669,6 +1676,13 @@ xf86XVGetStill(ClientPtr client,
                                              &ClipRegion, portPriv->DevPriv.ptr,
                                              pDraw);
 
+#ifdef _F_GETSTILL_GET_STOP_REQUEST_
+    if (ret == Success) {
+        portPriv->isOn = XV_ON;
+        pPort->pDraw = pDraw;  /* make sure we can get stop requests */
+    }
+#endif
+
  GET_STILL_BAILOUT:
 
     if ((clippedAway || (ret != Success)) && (portPriv->isOn == XV_ON)) {
@@ -1688,8 +1702,10 @@ xf86XVStopVideo(ClientPtr client, XvPortPtr pPort, DrawablePtr pDraw)
 {
     XvPortRecPrivatePtr portPriv = (XvPortRecPrivatePtr) (pPort->devPriv.ptr);
 
+#ifndef _F_PUT_ON_PIXMAP_
     if (pDraw->type != DRAWABLE_WINDOW)
         return BadAlloc;
+#endif
 
     xf86XVRemovePortFromWindow((WindowPtr) pDraw, portPriv);
 

@@ -69,22 +69,6 @@ in this Software without prior written authorization from The Open Group.
 #define EnqueueScreen(dev) dev->spriteInfo->sprite->pEnqueueScreen
 #define DequeueScreen(dev) dev->spriteInfo->sprite->pDequeueScreen
 
-typedef struct _Event {
-    InternalEvent *events;
-    ScreenPtr pScreen;
-    DeviceIntPtr pDev;          /* device this event _originated_ from */
-} EventRec, *EventPtr;
-
-typedef struct _EventQueue {
-    HWEventQueueType head, tail;        /* long for SetInputCheck */
-    CARD32 lastEventTime;       /* to avoid time running backwards */
-    int lastMotion;             /* device ID if last event motion? */
-    EventRec *events;           /* our queue as an array */
-    size_t nevents;             /* the number of buckets in our queue */
-    size_t dropped;             /* counter for number of consecutive dropped events */
-    mieqHandler handlers[128];  /* custom event handler */
-} EventQueueRec, *EventQueuePtr;
-
 static EventQueueRec miEventQueue;
 
 #ifdef XQUARTZ
@@ -108,7 +92,13 @@ wait_for_server_init(void)
 }
 #endif
 
-static size_t
+EventQueuePtr
+mieqGetEventQueuePtr()
+{
+	return &miEventQueue;
+}
+
+size_t
 mieqNumEnqueued(EventQueuePtr eventQueue)
 {
     size_t n_enqueued = 0;
@@ -314,9 +304,13 @@ mieqEnqueue(DeviceIntPtr pDev, InternalEvent *e)
         e->any.time = miEventQueue.lastEventTime;
 
     miEventQueue.lastEventTime = evt->any.time;
+#ifdef _F_MIEQ_SPRITEINFO_NULL_CHECK_
+    miEventQueue.events[oldtail].pScreen = ((pDev)&&(pDev->spriteInfo->sprite)) ? EnqueueScreen(pDev) : NULL;
+#else
     miEventQueue.events[oldtail].pScreen = pDev ? EnqueueScreen(pDev) : NULL;
-    miEventQueue.events[oldtail].pDev = pDev;
+#endif//_F_MIEQ_SPRITEINFO_NULL_CHECK_
 
+    miEventQueue.events[oldtail].pDev = pDev;
     miEventQueue.lastMotion = isMotion;
     miEventQueue.tail = (oldtail + 1) % miEventQueue.nevents;
 #ifdef XQUARTZ
@@ -630,9 +624,14 @@ mieqProcessInputEvents(void)
 #ifdef DPMSExtension
         else if (DPMSPowerLevel != DPMSModeOn)
             SetScreenSaverTimer();
-
+#ifdef _F_DPMS_PHONE_CTRL_
+        if (!DPMSPhoneCrtl)
+            if (DPMSPowerLevel != DPMSModeOn)
+                DPMSSet(serverClient, DPMSModeOn);
+#else
         if (DPMSPowerLevel != DPMSModeOn)
             DPMSSet(serverClient, DPMSModeOn);
+#endif
 #endif
 
         mieqProcessDeviceEvent(dev, &event, screen);

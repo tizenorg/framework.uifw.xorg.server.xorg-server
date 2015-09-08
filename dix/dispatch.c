@@ -137,6 +137,10 @@ typedef const char *string;
 #include "Xserver-dtrace.h"
 #endif
 
+#ifdef _F_INPUT_REDIRECTION_
+#include "compint.h"
+#endif //_F_INPUT_REDIRECTION_
+
 #define mskcnt ((MAXCLIENTS + 31) / 32)
 #define BITMASK(i) (1U << ((i) & 31))
 #define MASKIDX(i) ((i) >> 5)
@@ -1130,16 +1134,43 @@ ProcTranslateCoords(ClientPtr client)
         rep.dstX = rep.dstY = 0;
     }
     else {
+#ifdef _F_INPUT_REDIRECTION_
+        int x, y, rootX, rootY;
+#else //_F_INPUT_REDIRECTION_
         INT16 x, y;
+#endif //_F_INPUT_REDIRECTION_
 
         rep.sameScreen = xTrue;
         rep.child = None;
         /* computing absolute coordinates -- adjust to destination later */
         x = pWin->drawable.x + stuff->srcX;
         y = pWin->drawable.y + stuff->srcY;
+#ifdef _F_INPUT_REDIRECTION_
+ #ifdef COMPOSITE
+        CompositeXYScreenFromWindowRootCoordinate(pWin, x, y, &x, &y);
+        CompositeXYScreenToWindowRootCoordinate(pDst, x, y, &x, &y);
+ #endif
+
+        /* aduest to destination coordinates */
+        rep.dstX = x - pDst->drawable.x;
+        rep.dstY = y - pDst->drawable.y;
+
+        rootX = x;
+        rootY = y;
+#endif //_F_INPUT_REDIRECTION_
+
         pWin = pDst->firstChild;
         while (pWin) {
             BoxRec box;
+
+#ifdef _F_INPUT_REDIRECTION_
+            x = rootX;
+            y = rootY;
+
+ #ifdef COMPOSITE
+            CompositeGetInvTransformPoint(pWin, x, y, &x, &y);
+ #endif
+#endif//_F_INPUT_REDIRECTION_
 
             if ((pWin->mapped) &&
                 (x >= pWin->drawable.x - wBorderWidth(pWin)) &&
@@ -1160,15 +1191,21 @@ ProcTranslateCoords(ClientPtr client)
                                         x - pWin->drawable.x,
                                         y - pWin->drawable.y, &box))
                 ) {
+#ifdef _F_INPUT_REDIRECTION_
+                rootX = x;
+                rootY = y;
+#endif //_F_INPUT_REDIRECTION_
                 rep.child = pWin->drawable.id;
                 pWin = (WindowPtr) NULL;
             }
             else
                 pWin = pWin->nextSib;
         }
+#ifndef _F_INPUT_REDIRECTION_
         /* adjust to destination coordinates */
         rep.dstX = x - pDst->drawable.x;
         rep.dstY = y - pDst->drawable.y;
+#endif //_F_INPUT_REDIRECTION_
     }
     WriteReplyToClient(client, sizeof(xTranslateCoordsReply), &rep);
     return Success;
@@ -3904,6 +3941,10 @@ RemoveGPUScreen(ScreenPtr pScreen)
     }
     screenInfo.numGPUScreens--;
 
+    /* this gets freed later in the resource list, but without
+     * the screen existing it causes crashes - so remove it here */
+    if (pScreen->defColormap)
+        FreeResource(pScreen->defColormap, RT_COLORMAP);
     free(pScreen);
 
 }

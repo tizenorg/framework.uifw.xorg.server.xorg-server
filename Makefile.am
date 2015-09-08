@@ -40,6 +40,7 @@ SUBDIRS = \
 	exa \
 	config \
 	gesture \
+	hwc \
 	hw \
 	test
 

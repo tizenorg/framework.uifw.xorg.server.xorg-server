@@ -147,6 +147,7 @@ IsPointerEvent(InternalEvent *event)
     case ET_ButtonRelease:
     case ET_Motion:
         /* XXX: enter/leave ?? */
+    case ET_TouchCancel:
         return TRUE;
     default:
         break;
@@ -1199,7 +1200,6 @@ TouchRejected(DeviceIntPtr sourcedev, TouchPointInfoPtr ti, XID resource,
               TouchOwnershipEvent *ev)
 {
     Bool was_owner = (resource == ti->listeners[0].listener);
-    void *grab;
     int i;
 
     /* Send a TouchEnd event to the resource being removed, but only if they
@@ -1214,11 +1214,7 @@ TouchRejected(DeviceIntPtr sourcedev, TouchPointInfoPtr ti, XID resource,
 
     /* Remove the resource from the listener list, updating
      * ti->num_listeners, as well as ti->num_grabs if it was a grab. */
-    if (TouchRemoveListener(ti, resource)) {
-        if (dixLookupResourceByType(&grab, resource, RT_PASSIVEGRAB,
-                                    serverClient, DixGetAttrAccess) == Success)
-            ti->num_grabs--;
-    }
+    TouchRemoveListener(ti, resource);
 
     /* If the current owner was removed and there are further listeners, deliver
      * the TouchOwnership or TouchBegin event to the new owner. */
@@ -1228,6 +1224,28 @@ TouchRejected(DeviceIntPtr sourcedev, TouchPointInfoPtr ti, XID resource,
         TouchEndTouch(sourcedev, ti);
 
     CheckOldestTouch(sourcedev);
+}
+
+static void
+ProcessTouchCancelEvent(InternalEvent *event, DeviceIntPtr device)
+{
+    TouchCancelEvent *tce;
+    GrabPtr grab;
+
+    grab = device->deviceGrab.grab;
+
+    if (grab)
+        DeliverGrabbedEvent((InternalEvent *) event, device,
+                            FALSE);
+    else
+        DeliverDeviceEvents(GetSpriteWindow(device), (InternalEvent *) event,
+                            NullGrab, NullWindow, device);
+
+#if 0
+    TouchPointInfoPtr ti = TouchFindBySourceID(dev, ev->sourceid);
+
+    DeliverTouchEvents(dev, ti, (InternalEvent *) ev, ev->resource);
+#endif
 }
 
 /**
@@ -1312,34 +1330,19 @@ RetrieveTouchDeliveryData(DeviceIntPtr dev, TouchPointInfoPtr ti,
 
     if (listener->type == LISTENER_GRAB ||
         listener->type == LISTENER_POINTER_GRAB) {
-        rc = dixLookupResourceByType((pointer *) grab, listener->listener,
-                                     RT_PASSIVEGRAB,
-                                     serverClient, DixSendAccess);
-        if (rc != Success) {
-            /* the grab doesn't exist but we have a grabbing listener - this
-             * is an implicit/active grab */
-            rc = dixLookupClient(client, listener->listener, serverClient,
-                                 DixSendAccess);
-            if (rc != Success)
-                return FALSE;
 
-            *grab = dev->deviceGrab.grab;
-            if (!*grab)
-                return FALSE;
-        }
+        *grab = listener->grab;
+
+        BUG_RETURN_VAL(!*grab, FALSE);
 
         *client = rClient(*grab);
         *win = (*grab)->window;
         *mask = (*grab)->xi2mask;
     }
     else {
-        if (listener->level == CORE)
-            rc = dixLookupWindow(win, listener->listener,
-                                 serverClient, DixSendAccess);
-        else
-            rc = dixLookupResourceByType((pointer *) win, listener->listener,
-                                         RT_INPUTCLIENT,
-                                         serverClient, DixSendAccess);
+        rc = dixLookupResourceByType((pointer *) win, listener->listener,
+                                     listener->resource_type,
+                                     serverClient, DixSendAccess);
         if (rc != Success)
             return FALSE;
 
@@ -1479,6 +1482,8 @@ DeliverTouchEmulatedEvent(DeviceIntPtr dev, TouchPointInfoPtr ti,
              */
             l = &ti->listeners[ti->num_listeners - 1];
             l->listener = devgrab->resource;
+            l->grab = devgrab;
+            //l->resource_type = RT_NONE;
 
             if (devgrab->grabtype != XI2 || devgrab->type != XI_TouchBegin)
                 l->type = LISTENER_POINTER_GRAB;
@@ -1794,6 +1799,9 @@ ProcessOtherEvent(InternalEvent *ev, DeviceIntPtr device)
     case ET_TouchEnd:
         ProcessTouchEvent(ev, device);
         break;
+    case ET_TouchCancel:
+        ProcessTouchCancelEvent(ev, device);
+        break;
     default:
         ProcessDeviceEvent(ev, device);
         break;
@@ -1916,6 +1924,10 @@ DeliverTouchEvent(DeviceIntPtr dev, TouchPointInfoPtr ti, InternalEvent *ev,
             goto out;
         rc = DeliverOneTouchEvent(client, dev, ti, grab, win, ev);
         listener->state = LISTENER_IS_OWNER;
+    }
+    else if (ev->any.type == ET_TouchCancel) {
+        ev->touch_cancel_event.deviceid = dev->id;
+        rc = DeliverOneTouchEvent(client, dev, ti, grab, win, ev);
     }
     else
         ev->device_event.deviceid = dev->id;

@@ -51,6 +51,7 @@ static DevPrivateKeyRec DPMSKeyRec;
 static DevPrivateKey DPMSKey;
 static Bool DPMSClose(ScreenPtr pScreen);
 static int DPMSCount = 0;
+extern CallbackListPtr DPMSCallback;
 #endif
 
 Bool
@@ -162,6 +163,9 @@ DPMSSet(ClientPtr client, int level)
             pScrn->DPMSSet(pScrn, level, 0);
             xf86VGAarbiterUnlock(pScrn);
         }
+    }
+if (DPMSCallback) {
+        CallCallbacks(&DPMSCallback, (void *)&level);
     }
     return Success;
 }

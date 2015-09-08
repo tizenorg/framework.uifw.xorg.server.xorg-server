@@ -139,4 +139,7 @@
 /* Have X server platform bus support */
 #undef XSERVER_PLATFORM_BUS
 
+/* Support HWC extension */
+#undef HWC
+
 #endif /* _XORG_CONFIG_H_ */

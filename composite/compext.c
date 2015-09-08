@@ -355,6 +355,44 @@ ProcCompositeReleaseOverlayWindow(ClientPtr client)
 
     return Success;
 }
+#ifdef _F_INPUT_REDIRECTION_
+static int
+ProcCompositeSetCoordinateTransform (ClientPtr client)
+{
+    REQUEST (xCompositeSetCoordinateTransformReq);
+    CompWindowPtr cw;
+    WindowPtr    pWin;
+    int                  status;
+
+    REQUEST_SIZE_MATCH (xCompositeSetCoordinateTransformReq);
+    VERIFY_WINDOW(pWin, stuff->window, client, DixGetAttrAccess);
+
+    if (!pWin || !pWin->parent)
+    {
+       client->errorValue = stuff->window;
+       ErrorF("[%s] BadWindow : !pWin || !pWin->parent\n", __FUNCTION__);
+       return BadWindow;
+    }
+
+    cw = GetCompWindow (pWin);
+    if (!cw)
+    {
+       client->errorValue = stuff->window;
+       ErrorF("[%s] BadWindow : !cw = GetCompWindow (pWin)\n", __FUNCTION__);
+       return BadWindow;
+    }
+
+    status = CompositeSetCoordinateTransform (client, pWin, (PictTransform *) &stuff->transform);
+    if (status)
+    {
+       ErrorF("[%s] return status(=%d)\n", __FUNCTION__, status);
+       return status;
+    }
+
+    ErrorF("[%s] return client->noClientException(=%d)\n", __FUNCTION__, client->noClientException);
+    return client->noClientException;
+}
+#endif //_F_INPUT_REDIRECTION_
 
 static int (*ProcCompositeVector[CompositeNumberRequests]) (ClientPtr) = {
 ProcCompositeQueryVersion,
@@ -364,7 +402,13 @@ ProcCompositeQueryVersion,
         ProcCompositeUnredirectSubwindows,
         ProcCompositeCreateRegionFromBorderClip,
         ProcCompositeNameWindowPixmap,
+#ifdef _F_INPUT_REDIRECTION_
+        ProcCompositeGetOverlayWindow,
+        ProcCompositeReleaseOverlayWindow,
+        ProcCompositeSetCoordinateTransform,};
+#else //_F_INPUT_REDIRECTION_
         ProcCompositeGetOverlayWindow, ProcCompositeReleaseOverlayWindow,};
+#endif //_F_INPUT_REDIRECTION_
 
 static int
 ProcCompositeDispatch(ClientPtr client)
@@ -479,6 +523,29 @@ SProcCompositeReleaseOverlayWindow(ClientPtr client)
     return (*ProcCompositeVector[stuff->compositeReqType]) (client);
 }
 
+#ifdef _F_INPUT_REDIRECTION_
+static int
+SProcCompositeSetCoordinateTransform (ClientPtr client)
+{
+    int n;
+    REQUEST(xCompositeSetCoordinateTransformReq);
+    REQUEST_SIZE_MATCH(xCompositeSetCoordinateTransformReq);
+
+    swaps(&stuff->length);
+    swapl(&stuff->window);
+    swapl(&stuff->transform.matrix11);
+    swapl(&stuff->transform.matrix12);
+    swapl(&stuff->transform.matrix13);
+    swapl(&stuff->transform.matrix21);
+    swapl(&stuff->transform.matrix22);
+    swapl(&stuff->transform.matrix23);
+    swapl(&stuff->transform.matrix31);
+    swapl(&stuff->transform.matrix32);
+    swapl(&stuff->transform.matrix33);
+    return (*ProcCompositeVector[stuff->compositeReqType]) (client);
+}
+#endif //_F_INPUT_REDIRECTION_
+
 static int (*SProcCompositeVector[CompositeNumberRequests]) (ClientPtr) = {
 SProcCompositeQueryVersion,
         SProcCompositeRedirectWindow,
@@ -487,7 +554,13 @@ SProcCompositeQueryVersion,
         SProcCompositeUnredirectSubwindows,
         SProcCompositeCreateRegionFromBorderClip,
         SProcCompositeNameWindowPixmap,
+#ifdef _F_INPUT_REDIRECTION_
+        SProcCompositeGetOverlayWindow,
+        SProcCompositeReleaseOverlayWindow,
+        SProcCompositeSetCoordinateTransform,};
+#else //_F_INPUT_REDIRECTION_
         SProcCompositeGetOverlayWindow, SProcCompositeReleaseOverlayWindow,};
+#endif //_F_INPUT_REDIRECTION_
 
 static int
 SProcCompositeDispatch(ClientPtr client)

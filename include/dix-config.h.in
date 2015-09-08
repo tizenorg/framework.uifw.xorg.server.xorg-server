@@ -190,6 +190,9 @@
 /* Define to 1 if you have the `strndup' function. */
 #undef HAVE_STRNDUP
 
+/* Define if libsystemd-daemon is available */
+#undef HAVE_SYSTEMD_DAEMON
+
 /* Define to 1 if SYSV IPC is available */
 #undef HAVE_SYSV_IPC
 
@@ -302,6 +305,9 @@
 
 /* Build SELinux extension */
 #undef XSELINUX
+
+/* Build Smack extension */
+#undef XSMACK
 
 /* Support XCMisc extension */
 #undef XCMISC
@@ -423,6 +429,9 @@
 /* Define to 64-bit byteswap macro */
 #undef bswap_64
 
+/* Define to 1 if typeof works with your compiler. */
+#undef HAVE_TYPEOF
+
 /* The compiler supported TLS storage class, prefering initial-exec if tls_model is supported */
 #undef TLS
 
@@ -430,5 +439,8 @@
 #ifdef __APPLE__
 #include "dix-config-apple-verbatim.h"
 #endif
+
+/* Support HWC extension */
+#undef HWC
 
 #endif /* _DIX_CONFIG_H_ */
