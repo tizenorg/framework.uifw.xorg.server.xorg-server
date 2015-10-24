@@ -25,6 +25,7 @@
 #ifndef _HWCPRIV_H_
 #define _HWCPRIV_H_
 
+#define HAVE_STRNDUP
 #include <X11/X.h>
 #include "scrnintstr.h"
 #include "misc.h"
@@ -34,6 +35,9 @@
 #include "hwc.h"
 
 extern int hwc_request;
+
+#define STORAGE_SIZE 10
+#define STORAGE_EMPTY 0
 
 /*
  * Each screen has a list of clients and event masks
@@ -60,6 +64,13 @@ typedef struct hwc_screen_priv {
     hwc_screen_info_ptr        info;
     hwc_event_ptr events;
 } hwc_screen_priv_rec, *hwc_screen_priv_ptr;
+
+#ifdef _F_PRESENT_HWC_FLIP_
+typedef struct storage_of_drawables {
+    DrawablePtr drawables[STORAGE_SIZE];
+    unsigned int count;
+} storage_of_drawables_rec, *storage_of_drawables_ptr;
+#endif
 
 #define wrap(priv,real,mem,func) {\
     priv->mem = real->mem; \
@@ -90,6 +101,23 @@ hwc_free_events(WindowPtr window);
 
 int
 hwc_select_input(ClientPtr client, ScreenPtr screen, WindowPtr window, CARD32 mask);
-/* DDX interface */
+
+#ifdef _F_PRESENT_HWC_FLIP_
+/* Management ofStorage of drawables */
+void
+hwc_storage_add_drawables( DrawablePtr *drawable, int indx );
+
+void
+hwc_storage_clear( void );
+
+int
+hwc_storage_is_empty( void );
+
+#ifdef _F_PRESENT_SCANOUT_NOTIFY_
+void
+hwc_storage_remove_drawables (DrawablePtr drawable);
+#endif
+
+#endif
 
 #endif /* _HWCPRIV_H_ */

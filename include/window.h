@@ -26,13 +26,13 @@ Copyright 1987 by Digital Equipment Corporation, Maynard, Massachusetts.
 
                         All Rights Reserved
 
-Permission to use, copy, modify, and distribute this software and its
-documentation for any purpose and without fee is hereby granted,
+Permission to use, copy, modify, and distribute this software and its 
+documentation for any purpose and without fee is hereby granted, 
 provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in
+both that copyright notice and this permission notice appear in 
 supporting documentation, and that the name of Digital not be
 used in advertising or publicity pertaining to distribution of the
-software without specific, written prior permission.
+software without specific, written prior permission.  
 
 DIGITAL DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
 ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
@@ -73,15 +73,15 @@ typedef struct _BackingStore *BackingStorePtr;
 typedef struct _Window *WindowPtr;
 
 typedef int (*VisitWindowProcPtr) (WindowPtr /*pWin */ ,
-                                   pointer /*data */ );
+                                   void */*data */ );
 
 extern _X_EXPORT int TraverseTree(WindowPtr /*pWin */ ,
                                   VisitWindowProcPtr /*func */ ,
-                                  pointer /*data */ );
+                                  void */*data */ );
 
 extern _X_EXPORT int WalkTree(ScreenPtr /*pScreen */ ,
                               VisitWindowProcPtr /*func */ ,
-                              pointer /*data */ );
+                              void */*data */ );
 
 extern _X_EXPORT Bool CreateRootWindow(ScreenPtr /*pScreen */ );
 
@@ -108,7 +108,7 @@ extern _X_EXPORT WindowPtr CreateWindow(Window /*wid */ ,
                                         VisualID /*visual */ ,
                                         int * /*error */ );
 
-extern _X_EXPORT int DeleteWindow(pointer /*pWin */ ,
+extern _X_EXPORT int DeleteWindow(void */*pWin */ ,
                                   XID /*wid */ );
 
 extern _X_EXPORT int DestroySubwindows(WindowPtr /*pWin */ ,
@@ -220,9 +220,6 @@ extern _X_EXPORT void SendShapeNotify(WindowPtr /* pWin */ ,
 extern _X_EXPORT RegionPtr CreateBoundingShape(WindowPtr /* pWin */ );
 
 extern _X_EXPORT RegionPtr CreateClipShape(WindowPtr /* pWin */ );
-
-extern _X_EXPORT void DisableMapUnmapEvents(WindowPtr /* pWin */ );
-extern _X_EXPORT void EnableMapUnmapEvents(WindowPtr /* pWin */ );
 
 extern _X_EXPORT void SetRootClip(ScreenPtr pScreen, Bool enable);
 extern _X_EXPORT void PrintWindowTree(void);

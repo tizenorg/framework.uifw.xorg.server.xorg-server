@@ -15,6 +15,7 @@ XVSDKINCS = xf86xv.h xf86xvmc.h xf86xvpriv.h
 endif
 
 if XF86VIDMODE
+XF86VMODESOURCES = xf86vmode.c
 XF86VMODE_SDK = vidmodeproc.h
 endif
 
@@ -47,12 +48,12 @@ libcommon_la_SOURCES = xf86Configure.c xf86Bus.c xf86Config.c \
                       xf86VidMode.c xf86fbman.c xf86cmap.c \
                       xf86Helper.c xf86PM.c xf86Xinput.c xisb.c \
                       xf86Mode.c xorgHelper.c xf86Extensions.h \
-		      xf86Extensions.c xf86vmode.c \
+		      xf86Extensions.c $(XF86VMODESOURCES) \
                       $(XVSOURCES) $(BUSSOURCES) $(RANDRSOURCES)
 nodist_libcommon_la_SOURCES = xf86DefModeSet.c xf86Build.h
 libcommon_la_LIBADD = $(top_builddir)/config/libconfig.la
 
-INCLUDES = $(XORG_INCS) -I$(srcdir)/../ddc -I$(srcdir)/../i2c \
+AM_CPPFLAGS = $(XORG_INCS) -I$(srcdir)/../ddc -I$(srcdir)/../i2c \
 	   -I$(srcdir)/../loader -I$(srcdir)/../parser \
            -I$(srcdir)/../vbe -I$(srcdir)/../int10 \
 	   -I$(srcdir)/../vgahw -I$(srcdir)/../dixmods/extmod \

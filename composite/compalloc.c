@@ -45,6 +45,12 @@
 #include <dix-config.h>
 #endif
 
+#ifdef ENABLE_DLOG
+#define LOG_TAG "XORG_PIXMAP"
+#include <dlog.h>
+#endif
+
+
 #include "compint.h"
 
 static void
@@ -55,7 +61,7 @@ compScreenUpdate(ScreenPtr pScreen)
 }
 
 static void
-compBlockHandler(ScreenPtr pScreen, pointer pTimeout, pointer pReadmask)
+compBlockHandler(ScreenPtr pScreen, void *pTimeout, void *pReadmask)
 {
     CompScreenPtr cs = GetCompScreen(pScreen);
 
@@ -160,7 +166,7 @@ compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
                 return BadAccess;
 
     /*
-     * Allocate per-client per-window structure 
+     * Allocate per-client per-window structure
      * The client *could* allocate multiple, but while supported,
      * it is not expected to be common
      */
@@ -213,7 +219,7 @@ compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
             anyMarked = compMarkWindows(pWin, &pLayerWin);
 
         if (cw->damageRegistered) {
-            DamageUnregister(&pWin->drawable, cw->damage);
+            DamageUnregister(cw->damage);
             cw->damageRegistered = FALSE;
         }
         cw->update = CompositeRedirectManual;
@@ -317,6 +323,19 @@ compFreeClientWindow(WindowPtr pWin, XID id)
 
     if (pPixmap) {
         compRestoreWindow(pWin, pPixmap);
+#ifdef ENABLE_DLOG
+        SLOG(LOG_INFO, "XORG_PIXMAP", "pix_id:%p, pixmap:%p (%dx%d) refcnt:%d-1 win_id:%p win:%p (%dx%d) view:%d\n",
+            pPixmap->drawable.id,
+            pPixmap,
+            pPixmap->drawable.width,
+            pPixmap->drawable.height,
+            pPixmap->refcnt,
+            pWin->drawable.id,
+            pWin,
+            pWin->drawable.width,
+            pWin->drawable.height,
+            pWin->viewable);
+#endif
         (*pScreen->DestroyPixmap) (pPixmap);
     }
 }
@@ -361,7 +380,7 @@ compRedirectSubwindows(ClientPtr pClient, WindowPtr pWin, int update)
             if (ccw->update == CompositeRedirectManual)
                 return BadAccess;
     /*
-     * Allocate per-client per-window structure 
+     * Allocate per-client per-window structure
      * The client *could* allocate multiple, but while supported,
      * it is not expected to be common
      */
@@ -409,7 +428,7 @@ compRedirectSubwindows(ClientPtr pClient, WindowPtr pWin, int update)
         return BadAlloc;
     if (ccw->update == CompositeRedirectManual) {
         csw->update = CompositeRedirectManual;
-        /* 
+        /*
          * tell damage extension that damage events for this client are
          * critical output
          */
@@ -438,7 +457,7 @@ compFreeClientSubwindows(WindowPtr pWin, XID id)
 
             *prev = ccw->next;
             if (ccw->update == CompositeRedirectManual) {
-                /* 
+                /*
                  * tell damage extension that damage events for this client are
                  * critical output
                  */
@@ -563,6 +582,10 @@ compNewPixmap(WindowPtr pWin, int x, int y, int w, int h)
     pPixmap->screen_y = y;
 
     if (pParent->drawable.depth == pWin->drawable.depth) {
+#ifdef _F_TV_DEFECT_DO_NOT_COPY_PARENT_
+         /*change for the top-bottom stereo defect DF141212-01637*/
+        if(pWin->viewable == TRUE && pWin->redirectDraw == RedirectDrawNone) {
+#endif
         GCPtr pGC = GetScratchGC(pWin->drawable.depth, pScreen);
 
         if (pGC) {
@@ -578,39 +601,57 @@ compNewPixmap(WindowPtr pWin, int x, int y, int w, int h)
                                    y - pParent->drawable.y, w, h, 0, 0);
             FreeScratchGC(pGC);
         }
+#ifdef _F_TV_DEFECT_DO_NOT_COPY_PARENT_
+        }
+#endif
     }
     else {
         PictFormatPtr pSrcFormat = PictureWindowFormat(pParent);
         PictFormatPtr pDstFormat = PictureWindowFormat(pWin);
         XID inferiors = IncludeInferiors;
         int error;
+        PicturePtr pSrcPicture = NULL;
+        PicturePtr pDstPicture = NULL;
 
-        PicturePtr pSrcPicture = CreatePicture(None,
-                                               &pParent->drawable,
-                                               pSrcFormat,
-                                               CPSubwindowMode,
-                                               &inferiors,
-                                               serverClient, &error);
+        if (pSrcFormat)
+            pSrcPicture = CreatePicture(None,
+                                       &pParent->drawable,
+                                       pSrcFormat,
+                                       CPSubwindowMode,
+                                       &inferiors,
+                                       serverClient, &error);
 
-        PicturePtr pDstPicture = CreatePicture(None,
-                                               &pPixmap->drawable,
-                                               pDstFormat,
-                                               0, 0,
-                                               serverClient, &error);
+        if (pDstFormat)
+            pDstPicture = CreatePicture(None,
+                                       &pPixmap->drawable,
+                                       pDstFormat,
+                                       0, 0,
+                                       serverClient, &error);
 
         if (pSrcPicture && pDstPicture) {
+#ifdef _F_CLEAR_NEW_COMP_PIXMAP_
             CompositePicture(PictOpClear,
                              pSrcPicture,
                              NULL,
                              pDstPicture,
                              x - pParent->drawable.x,
                              y - pParent->drawable.y, 0, 0, 0, 0, w, h);
+#else
+            CompositePicture(PictOpSrc,
+                             pSrcPicture,
+                             NULL,
+                             pDstPicture,
+                             x - pParent->drawable.x,
+                             y - pParent->drawable.y, 0, 0, 0, 0, w, h);
+
+#endif
         }
         if (pSrcPicture)
             FreePicture(pSrcPicture, 0);
         if (pDstPicture)
             FreePicture(pDstPicture, 0);
     }
+
     return pPixmap;
 }
 
@@ -658,7 +699,7 @@ compSetParentPixmap(WindowPtr pWin)
     CompWindowPtr cw = GetCompWindow(pWin);
 
     if (cw->damageRegistered) {
-        DamageUnregister(&pWin->drawable, cw->damage);
+        DamageUnregister(cw->damage);
         cw->damageRegistered = FALSE;
         DamageEmpty(cw->damage);
     }

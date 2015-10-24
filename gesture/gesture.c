@@ -206,7 +206,7 @@ GestureRemoveWindowFromList(Window win, struct xorg_list *winlst)
 
 /*
  * functions for gesture driver
- */ 
+ */
 Bool GestureSetMaxNumberOfFingers(int num_finger)
 {
 	int i;
@@ -318,7 +318,7 @@ Bool GestureHasSelectedEvents(WindowPtr pWin, Mask *pEventMask)
 /*
   * Hooking functions for tracing destroy of grab window(s)
   */
-static void GestureResourceStateCallback(CallbackListPtr *pcbl, pointer closure, pointer calldata)
+static void GestureResourceStateCallback(CallbackListPtr *pcbl, void *closure, void *calldata)
 {
 	int i, j, none_win_count;
 	GestureWindowPrivatePtr pPriv;
@@ -378,7 +378,7 @@ static void GestureResourceStateCallback(CallbackListPtr *pcbl, pointer closure,
 #ifdef __DEBUG_GESTURE_EXT__
 			ErrorF("[X11][GestureResourceStateCallback][after] grabbed_events_mask=0x%x\n", grabbed_events_mask);
 #endif//__DEBUG_GESTURE_EXT__
-		}		
+		}
 	}
 
 	if((grabbed_events_mask != prev_grabbed_events_mask) && gpGestureEventsGrabbed)
@@ -464,7 +464,7 @@ GestureSendEvent (WindowPtr pWin, int type, unsigned int mask, xGestureCommonEve
        {
 #ifdef __DEBUG_GESTURE_EXT__
        	ErrorF("[X11][GestureSendEvent] selected window doesn't have valid event mask ! (pPriv->mask=0x%x, mask=0x%x)\n", pPriv->mask, mask);
-#endif//__DEBUG_GESTURE_EXT__       
+#endif//__DEBUG_GESTURE_EXT__
        	return;
        }
     }
@@ -869,7 +869,7 @@ failed:
     ErrorF("[X11][ProcGestureGetSelectedEvents] Failed !\n");
 #endif//__DEBUG_GESTURE_EXT__
 
-    return ret;	
+    return ret;
 }
 
 static int
@@ -1118,7 +1118,7 @@ ProcGestureUngrabEvent (register ClientPtr client)
 #ifdef __DEBUG_GESTURE_EXT__
 		ErrorF("[X11][ProcGestureUngrabEvent][after] grabbed_events_mask=0x%x\n", grabbed_events_mask);
 #endif//__DEBUG_GESTURE_EXT__
-	}	
+	}
 	rep.status = GestureUngrabSuccess;
     }
 

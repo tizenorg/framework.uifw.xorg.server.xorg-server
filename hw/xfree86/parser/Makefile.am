@@ -14,6 +14,7 @@ INTERNAL_SOURCES= \
 	Flags.c \
 	Input.c \
 	InputClass.c \
+	OutputClass.c \
 	Layout.c \
 	Module.c \
 	Video.c \
@@ -51,4 +52,4 @@ sdk_HEADERS = \
 	xf86Parser.h \
 	xf86Optrec.h
 
-INCLUDES = -I$(srcdir)/../common
+AM_CPPFLAGS = -I$(srcdir)/../common

@@ -33,7 +33,7 @@ hwc_free_events(WindowPtr window)
 {
     hwc_screen_priv_ptr screen_priv = hwc_screen_priv(window->drawable.pScreen);
     hwc_event_ptr *previous, current=NULL;
-    
+
     if (!screen_priv)
         return;
 
@@ -45,7 +45,7 @@ hwc_free_events(WindowPtr window)
     }
 
     if(current)
-        free((pointer) current);
+        free((void *) current);
 }
 
 static void
@@ -68,8 +68,15 @@ hwc_event_swap(xGenericEvent *from, xGenericEvent *to)
 void
 hwc_send_config_notify(ScreenPtr screen, int maxLayer)
 {
+    hwc_send_config_notify2(screen, NULL, maxLayer);
+}
+
+void
+hwc_send_config_notify2(ScreenPtr screen, RRCrtcPtr crtc, int maxLayer)
+{
     hwc_screen_priv_ptr screen_priv = hwc_screen_priv(screen);
 
+    CARD32 crtc_id = crtc ? crtc->id : 0;
     if (screen_priv) {
         xHWCConfigureNotify cn = {
             .type = GenericEvent,
@@ -77,6 +84,7 @@ hwc_send_config_notify(ScreenPtr screen, int maxLayer)
             .length = (sizeof(xHWCConfigureNotify) - 32) >> 2,
             .evtype = HWCConfigureNotify,
             .maxLayer = maxLayer,
+            .crtc = crtc_id,
         };
         hwc_event_ptr event;
 

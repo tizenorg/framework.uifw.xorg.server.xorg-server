@@ -68,10 +68,6 @@ extern _X_EXPORT Bool noDbeExtension;
 extern void DbeExtensionInit(void);
 #endif
 
-#ifdef DMXEXT
-extern void DMXExtensionInit(void);
-#endif
-
 #if defined(DPMSExtension)
 #include <X11/extensions/dpmsconst.h>
 extern _X_EXPORT Bool noDPMSExtension;
@@ -148,10 +144,8 @@ extern void XFree86BigfontExtensionInit(void);
 
 extern void BigReqExtensionInit(void);
 
-#ifdef XFIXES
 extern _X_EXPORT Bool noXFixesExtension;
 extern void XFixesExtensionInit(void);
-#endif
 
 extern void XInputExtensionInit(void);
 extern _X_EXPORT void AssignTypeAndName(DeviceIntPtr dev,
@@ -172,6 +166,16 @@ extern void SELinuxExtensionInit(void);
 extern _X_EXPORT Bool noSmackExtension;
 extern void SmackExtensionInit(void);
 #endif
+
+#if defined(SMACK_UTIL)
+#include "smack_util.h"
+#endif
+
+#if defined(CONTAINER)
+#include "container.h"
+extern _X_EXPORT Bool noContainerExtension;
+extern void ContainerExtensionInit(void);
+#endif // _F_CONTAINER_EXTENSION_
 
 #ifdef XTEST
 #include <X11/extensions/xtestconst.h>
@@ -195,7 +199,26 @@ extern void XvMCExtensionInit(void);
 #if defined(HWC)
 #include <X11/extensions/hwctokens.h>
 #include <X11/extensions/hwcproto.h>
+extern _X_EXPORT Bool noHWCExtension;
 extern void hwc_extension_init(void);
+#endif
+
+#if defined(HWA)
+#include <X11/extensions/hwaproto.h>
+extern _X_EXPORT Bool noHWAExtension;
+extern void hwa_extension_init(void);
+#endif
+
+#if defined(DRI3)
+#include <X11/extensions/dri3proto.h>
+extern _X_EXPORT Bool noDRI3Extension;
+extern void dri3_extension_init(void);
+#endif
+
+#if defined(PRESENT)
+#include <X11/extensions/presentproto.h>
+#include "presentext.h"
+extern _X_EXPORT Bool noPresentExtension;
 #endif
 
 #endif

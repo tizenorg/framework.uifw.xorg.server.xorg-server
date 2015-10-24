@@ -7,6 +7,20 @@
 #include "window.h"             /* for WindowPtr */
 #include "extinit.h"
 
+#ifdef ENABLE_TTRACE
+#include <ttrace.h>
+
+#define TTRACE_INPUT_BEGIN(NAME) traceBegin(TTRACE_TAG_INPUT, NAME)
+#define TTRACE_INPUT_END() traceEnd(TTRACE_TAG_INPUT)
+#define TTRACE_VIDEO_BEGIN(NAME) traceBegin(TTRACE_TAG_VIDEO, NAME)
+#define TTRACE_VIDEO_END() traceEnd(TTRACE_TAG_VIDEO)
+#else //ENABLE_TTRACE
+#define TTRACE_INPUT_BEGIN(NAME)
+#define TTRACE_INPUT_END()
+#define TTRACE_VIDEO_BEGIN(NAME)
+#define TTRACE_VIDEO_END()
+#endif //ENABLE_TTRACE
+
 /* Global X server variables that are visible to mi, dix, os, and ddx */
 
 extern _X_EXPORT CARD32 defaultScreenSaverTime;
@@ -22,7 +36,7 @@ extern _X_EXPORT Bool noInputInit;
 extern _X_EXPORT Bool screenSaverSuspended;
 #endif
 
-extern _X_EXPORT char *defaultFontPath;
+extern _X_EXPORT const char *defaultFontPath;
 extern _X_EXPORT int monitorResolution;
 extern _X_EXPORT int defaultColorVisualClass;
 

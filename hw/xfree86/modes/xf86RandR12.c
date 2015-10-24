@@ -31,6 +31,7 @@
 #include "xf86.h"
 #include "os.h"
 #include "globals.h"
+#include "xf86Modes.h"
 #include "xf86Priv.h"
 #include "xf86DDC.h"
 #include "mipointer.h"
@@ -453,7 +454,6 @@ xf86RandR12GetInfo(ScreenPtr pScreen, Rotation * rotations)
     ScrnInfoPtr scrp = xf86ScreenToScrn(pScreen);
     XF86RandRInfoPtr randrp = XF86RANDRINFO(pScreen);
     DisplayModePtr mode;
-    int refresh0 = 60;
     int maxX = 0, maxY = 0;
 
     *rotations = randrp->supported_rotations;
@@ -478,8 +478,6 @@ xf86RandR12GetInfo(ScreenPtr pScreen, Rotation * rotations)
             if (maxY < mode->VDisplay)
                 maxY = mode->VDisplay;
         }
-        if (mode == scrp->modes)
-            refresh0 = refresh;
         pSize = RRRegisterSize(pScreen,
                                mode->HDisplay, mode->VDisplay,
                                randrp->mmWidth, randrp->mmHeight);
@@ -683,7 +681,6 @@ xf86RandR12ScreenSetSize(ScreenPtr pScreen,
     WindowPtr pRoot = pScreen->root;
     PixmapPtr pScrnPix;
     Bool ret = FALSE;
-    Bool panning = FALSE;
     int c;
 
     if (xf86RandR12Key) {
@@ -715,7 +712,6 @@ xf86RandR12ScreenSetSize(ScreenPtr pScreen,
                 crtc->panningTrackingArea.y2 += height - pScreen->height;
             xf86RandR13VerifyPanningArea(crtc, width, height);
             xf86RandR13Pan(crtc, randrp->pointerX, randrp->pointerY);
-	    panning = TRUE;
         }
     }
 
@@ -945,8 +941,6 @@ xf86RandR12SetRotations(ScreenPtr pScreen, Rotation rotations)
 void
 xf86RandR12SetTransformSupport(ScreenPtr pScreen, Bool transforms)
 {
-    XF86RandRInfoPtr randrp;
-
 #if RANDR_13_INTERFACE
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     int c;
@@ -956,7 +950,6 @@ xf86RandR12SetTransformSupport(ScreenPtr pScreen, Bool transforms)
     if (xf86RandR12Key == NULL)
         return;
 
-    randrp = XF86RANDRINFO(pScreen);
 #if RANDR_13_INTERFACE
     for (c = 0; c < config->num_crtc; c++) {
         xf86CrtcPtr crtc = config->crtc[c];
@@ -1079,7 +1072,7 @@ xf86RandR12CrtcNotify(RRCrtcPtr randr_crtc)
             randr_output = output->randr_output;
             randr_outputs[numOutputs++] = randr_output;
             /*
-             * We make copies of modes, so pointer equality 
+             * We make copies of modes, so pointer equality
              * isn't sufficient
              */
             for (j = 0; j < randr_output->numModes + randr_output->numUserModes;
@@ -1209,7 +1202,6 @@ xf86RandR12CrtcSet(ScreenPtr pScreen,
 
         if (randr_mode) {
             DisplayModeRec mode;
-            RRTransformPtr transform = RRCrtcGetTransform(randr_crtc);
 
             xf86RandRModeConvert(pScrn, randr_mode, &mode);
             if (!xf86CrtcSetModeTransform
@@ -1264,12 +1256,13 @@ xf86RandR12CrtcSetGamma(ScreenPtr pScreen, RRCrtcPtr randr_crtc)
         CARD16 *tmp_ptr;
 
         tmp_ptr =
-            realloc(crtc->gamma_red, 3 * crtc->gamma_size * sizeof(CARD16));
+            realloc(crtc->gamma_red,
+                    3 * randr_crtc->gammaSize * sizeof(CARD16));
         if (!tmp_ptr)
             return FALSE;
         crtc->gamma_red = tmp_ptr;
-        crtc->gamma_green = crtc->gamma_red + crtc->gamma_size;
-        crtc->gamma_blue = crtc->gamma_green + crtc->gamma_size;
+        crtc->gamma_green = crtc->gamma_red + randr_crtc->gammaSize;
+        crtc->gamma_blue = crtc->gamma_green + randr_crtc->gammaSize;
     }
 
     crtc->gamma_size = randr_crtc->gammaSize;
@@ -1324,6 +1317,34 @@ xf86RandR12CrtcGetGamma(ScreenPtr pScreen, RRCrtcPtr randr_crtc)
 
     return TRUE;
 }
+
+#ifdef _F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_
+/* added for stereoscopic mode support */
+static void xf86GetStereoBufferSize(RROutputPtr randr_output, int planeID,
+           short* width, short* height)
+{
+    xf86OutputPtr output = randr_output->devPrivate;
+    if (NULL == output->funcs->get_stereo_buffer_size)
+    {
+        return ;
+    }
+
+    output->funcs->get_stereo_buffer_size(output, planeID, width, height) ;
+}
+
+/* added for stereoscopic mode support */
+static void xf86GetDrawingRectangle(RROutputPtr randr_output, int planeID,
+           DrawRect* rect[RECT_MAX])
+{
+    xf86OutputPtr output = randr_output->devPrivate;
+    if (NULL == output->funcs->get_drawing_rect)
+    {
+        return ;
+    }
+
+    output->funcs->get_drawing_rect(output, planeID, rect) ;
+}
+#endif
 
 static Bool
 xf86RandR12OutputSetProperty(ScreenPtr pScreen,
@@ -1454,7 +1475,6 @@ xf86RandR12SetInfo12(ScreenPtr pScreen)
     RRCrtcPtr *crtcs;
     int ncrtc;
     int o, c, l;
-    RRCrtcPtr randr_crtc;
     int nclone;
 
     clones = malloc(config->num_output * sizeof(RROutputPtr));
@@ -1466,11 +1486,6 @@ xf86RandR12SetInfo12(ScreenPtr pScreen)
         for (c = 0; c < config->num_crtc; c++)
             if (output->possible_crtcs & (1 << c))
                 crtcs[ncrtc++] = config->crtc[c]->randr_crtc;
-
-        if (output->crtc)
-            randr_crtc = output->crtc->randr_crtc;
-        else
-            randr_crtc = NULL;
 
         if (!RROutputSetCrtcs(output->randr_output, crtcs, ncrtc)) {
             free(crtcs);
@@ -1770,6 +1785,19 @@ xf86RandR12EnterVT(ScrnInfoPtr pScrn)
     return RRGetInfo(pScreen, TRUE);    /* force a re-probe of outputs and notify clients about changes */
 }
 
+static void
+xf86DetachOutputGPU(ScreenPtr pScreen)
+{
+    rrScrPrivPtr rp = rrGetScrPriv(pScreen);
+    int i;
+
+    /* make sure there are no attached shared scanout pixmaps first */
+    for (i = 0; i < rp->numCrtcs; i++)
+        RRCrtcDetachScanoutPixmap(rp->crtcs[i]);
+
+    DetachOutputGPU(pScreen);
+}
+
 static Bool
 xf86RandR14ProviderSetOutputSource(ScreenPtr pScreen,
                                    RRProviderPtr provider,
@@ -1779,7 +1807,7 @@ xf86RandR14ProviderSetOutputSource(ScreenPtr pScreen,
         if (provider->output_source) {
             ScreenPtr cmScreen = pScreen->current_master;
 
-            DetachOutputGPU(pScreen);
+            xf86DetachOutputGPU(pScreen);
             AttachUnboundGPU(cmScreen, pScreen);
         }
         provider->output_source = NULL;
@@ -1807,7 +1835,7 @@ xf86RandR14ProviderSetOffloadSink(ScreenPtr pScreen,
     if (!sink_provider) {
         if (provider->offload_sink) {
             ScreenPtr cmScreen = pScreen->current_master;
-            DetachOutputGPU(pScreen);
+            xf86DetachOutputGPU(pScreen);
             AttachUnboundGPU(cmScreen, pScreen);
         }
 
@@ -1885,6 +1913,29 @@ xf86RandR13ConstrainCursorHarder(DeviceIntPtr dev, ScreenPtr screen, int mode, i
     }
 }
 
+static void
+xf86RandR14ProviderDestroy(ScreenPtr screen, RRProviderPtr provider)
+{
+    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
+    xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(scrn);
+
+    if (config->randr_provider == provider) {
+        if (config->randr_provider->offload_sink) {
+            DetachOffloadGPU(screen);
+            config->randr_provider->offload_sink = NULL;
+            RRSetChanged(screen);
+        }
+        else if (config->randr_provider->output_source) {
+            xf86DetachOutputGPU(screen);
+            config->randr_provider->output_source = NULL;
+            RRSetChanged(screen);
+        }
+        else if (screen->current_master)
+            DetachUnboundGPU(screen);
+    }
+    config->randr_provider = NULL;
+}
+
 static Bool
 xf86RandR12Init12(ScreenPtr pScreen)
 {
@@ -1914,6 +1965,13 @@ xf86RandR12Init12(ScreenPtr pScreen)
     rp->rrProviderSetProperty = xf86RandR14ProviderSetProperty;
     rp->rrProviderGetProperty = xf86RandR14ProviderGetProperty;
     rp->rrCrtcSetScanoutPixmap = xf86CrtcSetScanoutPixmap;
+    rp->rrProviderDestroy = xf86RandR14ProviderDestroy;
+
+#ifdef _F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_
+    /* added for stereoscopic mode support */
+    rp->getStereoBufferSize   = xf86GetStereoBufferSize ;
+    rp->getDrawingRect   = xf86GetDrawingRectangle ;
+#endif
 
     pScrn->PointerMoved = xf86RandR12PointerMoved;
     pScrn->ChangeGamma = xf86RandR12ChangeGamma;

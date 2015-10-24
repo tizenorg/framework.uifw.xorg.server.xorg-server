@@ -57,8 +57,6 @@
 
 #include "extinit.h"
 
-extern int DeviceValuator;
-
 /* XTest events are sent during request processing and may be interruped by
  * a SIGIO. We need a separate event list to avoid events overwriting each
  * other's memory */
@@ -80,6 +78,18 @@ DeviceIntPtr xtestpointer, xtestkeyboard;
 #include "panoramiX.h"
 #include "panoramiXsrv.h"
 #endif
+
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+#ifndef XI_TouchBegin
+#define XI_TouchBegin 18
+#endif
+#ifndef XI_TouchUpdate
+#define XI_TouchUpdate 19
+#endif
+#ifndef XI_TouchEnd
+#define XI_TouchEnd 20
+#endif
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
 
 static int XTestSwapFakeInput(ClientPtr /* client */ ,
                               xReq *    /* req */
@@ -129,7 +139,7 @@ ProcXTestCompareCursor(ClientPtr client)
     else if (stuff->cursor == XTestCurrentCursor)
         pCursor = GetSpriteCursor(ptr);
     else {
-        rc = dixLookupResourceByType((pointer *) &pCursor, stuff->cursor,
+        rc = dixLookupResourceByType((void **) &pCursor, stuff->cursor,
                                      RT_CURSOR, client, DixReadAccess);
         if (rc != Success) {
             client->errorValue = stuff->cursor;
@@ -158,7 +168,6 @@ ProcXTestFakeInput(ClientPtr client)
     DeviceIntPtr dev = NULL;
     WindowPtr root;
     Bool extension = FALSE;
-    deviceValuator *dv = NULL;
     ValuatorMask mask;
     int valuators[MAX_VALUATORS] = { 0 };
     int numValuators = 0;
@@ -168,6 +177,10 @@ ProcXTestFakeInput(ClientPtr client)
     int base = 0;
     int flags = 0;
     int need_ptr_update = 1;
+#ifdef _ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_
+    xXTestFakeInputReply rep;
+    int res = 0;
+#endif //_ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_
 
     nev = (stuff->length << 2) - sizeof(xReq);
     if ((nev % sizeof(xEvent)) || !nev)
@@ -197,6 +210,28 @@ ProcXTestFakeInput(ClientPtr client)
                 client->errorValue = ev->u.u.type;
                 return BadValue;
             }
+#ifdef _ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_
+            res = SmackUtilHaveAuthority(client, "xorg::inputgen", DixReadAccess | DixWriteAccess);
+            rep = (xXTestFakeInputReply) {
+                .type = X_Reply,
+                .accepted = xTrue,
+                .sequenceNumber = client->sequence,
+                .length = 0
+            };
+
+            if (res == Success) {
+                rep.accepted = xTrue;
+            } else {
+                rep.accepted = xFalse;
+            }
+
+            if (client->swapped) {
+                swaps(&rep.sequenceNumber);
+            }
+
+            WriteToClient(client, sizeof(xXTestFakeInputReply), &rep);
+            if (res != Success) return BadAccess;
+#endif //_ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_
             break;
         case XI_DeviceButtonPress:
         case XI_DeviceButtonRelease:
@@ -211,6 +246,38 @@ ProcXTestFakeInput(ClientPtr client)
                 return BadValue;
             }
             break;
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+        case XI_TouchBegin:
+        case XI_TouchUpdate:
+        case XI_TouchEnd:
+            if (!dev->touch) {
+                client->errorValue = ev->u.u.type;
+                return BadValue;
+            }
+#ifdef _ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_
+            res = SmackUtilHaveAuthority(client, "xorg::inputgen", DixReadAccess | DixWriteAccess);
+            rep = (xXTestFakeInputReply) {
+                .type = X_Reply,
+                .accepted = xTrue,
+                .sequenceNumber = client->sequence,
+                .length = 0
+            };
+
+            if (res == Success) {
+                rep.accepted = xTrue;
+            } else {
+                rep.accepted = xFalse;
+            }
+
+            if (client->swapped) {
+                swaps(&rep.sequenceNumber);
+            }
+
+            WriteToClient(client, sizeof(xXTestFakeInputReply), &rep);
+            if (res != Success) return BadAccess;
+#endif //_ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_
+            break;
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
         case XI_ProximityIn:
         case XI_ProximityOut:
             if (!dev->proximity) {
@@ -227,7 +294,11 @@ ProcXTestFakeInput(ClientPtr client)
         if (nev == 1 && type == XI_DeviceMotionNotify)
             return BadLength;   /* DevMotion must be followed by DevValuator */
 
-        if (type == XI_DeviceMotionNotify) {
+        if (type == XI_DeviceMotionNotify
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+        || type == XI_TouchBegin || type == XI_TouchUpdate || type == XI_TouchEnd
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
+        ){
             firstValuator = ((deviceValuator *) (ev + 1))->first_valuator;
             if (firstValuator > dev->valuator->numAxes) {
                 client->errorValue = ev->u.u.type;
@@ -243,14 +314,14 @@ ProcXTestFakeInput(ClientPtr client)
         }
 
         if (nev > 1 && !dev->valuator) {
-            client->errorValue = dv->first_valuator;
+            client->errorValue = firstValuator;
             return BadValue;
         }
 
         /* check validity of valuator events */
         base = firstValuator;
         for (n = 1; n < nev; n++) {
-            dv = (deviceValuator *) (ev + n);
+            deviceValuator *dv = (deviceValuator *) (ev + n);
             if (dv->type != DeviceValuator) {
                 client->errorValue = dv->type;
                 return BadValue;
@@ -286,8 +357,10 @@ ProcXTestFakeInput(ClientPtr client)
                 return BadValue;
             }
         }
-        type = type - XI_DeviceKeyPress + KeyPress;
-
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+        if (type != XI_TouchBegin && type != XI_TouchUpdate && type != XI_TouchEnd)
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
+            type = type - XI_DeviceKeyPress + KeyPress;
     }
     else {
         if (nev != 1)
@@ -308,7 +381,7 @@ ProcXTestFakeInput(ClientPtr client)
             numValuators = 2;
             firstValuator = 0;
             if (ev->u.u.detail == xFalse)
-                flags = POINTER_ABSOLUTE | POINTER_SCREEN;
+                flags = POINTER_ABSOLUTE | POINTER_DESKTOP;
             break;
         default:
             client->errorValue = ev->u.u.type;
@@ -355,6 +428,8 @@ ProcXTestFakeInput(ClientPtr client)
     switch (type) {
     case KeyPress:
     case KeyRelease:
+        if (!dev)
+            return BadDevice;
         if (!dev->key)
             return BadDevice;
 
@@ -379,6 +454,14 @@ ProcXTestFakeInput(ClientPtr client)
                 client->errorValue = ev->u.keyButtonPointer.root;
                 return BadValue;
             }
+
+            /* Add the root window's offset to the valuators */
+            if ((flags & POINTER_ABSOLUTE) && firstValuator <= 1 && numValuators > 0) {
+                if (firstValuator == 0)
+                    valuators[0] += root->drawable.pScreen->x;
+                if (firstValuator < 2 && firstValuator + numValuators > 1)
+                    valuators[1 - firstValuator] += root->drawable.pScreen->y;
+            }
         }
         if (ev->u.u.detail != xTrue && ev->u.u.detail != xFalse) {
             client->errorValue = ev->u.u.detail;
@@ -398,6 +481,19 @@ ProcXTestFakeInput(ClientPtr client)
             return BadValue;
         }
         break;
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+    case XI_TouchBegin:
+    case XI_TouchUpdate:
+    case XI_TouchEnd:
+        if (!dev->touch)
+            return BadDevice;
+
+        if (ev->u.u.detail < 0) {
+            client->errorValue = ev->u.u.detail;
+            return BadValue;
+        }
+        break;
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
     }
     if (screenIsSaved == SCREEN_SAVER_ON)
         dixSaveScreens(serverClient, SCREEN_SAVER_OFF, ScreenSaverReset);
@@ -418,10 +514,19 @@ ProcXTestFakeInput(ClientPtr client)
         nevents =
             GetKeyboardEvents(xtest_evlist, dev, type, ev->u.u.detail, NULL);
         break;
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+    case XI_TouchBegin:
+    case XI_TouchUpdate:
+    case XI_TouchEnd:
+        valuator_mask_set_range(&mask, firstValuator, numValuators, valuators);
+        nevents =
+            GetTouchEvents(xtest_evlist, dev, ev->u.u.detail, type, 0, &mask);
+        break;
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
     }
 
     for (i = 0; i < nevents; i++)
-        mieqProcessDeviceEvent(dev, &xtest_evlist[i], NULL);
+        mieqProcessDeviceEvent(dev, &xtest_evlist[i], miPointerGetScreen(inputInfo.pointer));
 
     if (need_ptr_update)
         miPointerUpdateSprite(dev);
@@ -574,6 +679,28 @@ InitXTestDevices(void)
     AttachDevice(NULL, xtestkeyboard, inputInfo.keyboard);
 }
 
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+void
+InitXTestHWKeyTouchDevices(void)
+{
+    DeviceIntPtr xtestTouch, xtestHWKey;
+    if (AllocXTestHWKeyTouchDevice(serverClient, "Virtual core",
+                         &xtestTouch, &xtestHWKey,
+                         inputInfo.pointer, inputInfo.keyboard) != Success)
+         FatalError("Failed to allocate XTest HWKeyTouch devices");
+
+    if (ActivateDevice(xtestTouch, TRUE) != Success ||
+        ActivateDevice(xtestHWKey, TRUE) != Success)
+        FatalError("Failed to activate XTest HWKeyTouch core devices.");
+    if (!EnableDevice(xtestTouch, TRUE) || !EnableDevice(xtestHWKey, TRUE))
+        FatalError("Failed to enable XTest HWKeyTouch core devices.");
+
+    AttachDevice(NULL, xtestTouch, inputInfo.pointer);
+
+    AttachDevice(NULL, xtestHWKey, inputInfo.keyboard);
+}
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
+
 /**
  * Don't allow changing the XTest property.
  */
@@ -633,6 +760,48 @@ AllocXTestDevice(ClientPtr client, const char *name,
 
     return retval;
 }
+
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+int
+AllocXTestHWKeyTouchDevice(ClientPtr client, const char *name,
+                 DeviceIntPtr *ptr, DeviceIntPtr *keybd,
+                 DeviceIntPtr master_ptr, DeviceIntPtr master_keybd)
+{
+    int retval;
+    char *xtestname;
+    char dummy = 1;
+
+    if (asprintf(&xtestname, "%s XTEST", name) == -1)
+        return BadAlloc;
+
+    retval =
+        AllocHWKeyTouchDevicePair(client, xtestname, ptr, keybd, CoreTouchProc,
+                        CoreKeyboardProc, FALSE);
+    if (retval == Success) {
+        (*ptr)->xtest_master_id = master_ptr->id;
+        (*keybd)->xtest_master_id = master_keybd->id;
+
+        XIChangeDeviceProperty(*ptr, XIGetKnownProperty(XI_PROP_XTEST_DEVICE),
+                               XA_INTEGER, 8, PropModeReplace, 1, &dummy,
+                               FALSE);
+        XISetDevicePropertyDeletable(*ptr,
+                                     XIGetKnownProperty(XI_PROP_XTEST_DEVICE),
+                                     FALSE);
+        XIRegisterPropertyHandler(*ptr, DeviceSetXTestProperty, NULL, NULL);
+        XIChangeDeviceProperty(*keybd, XIGetKnownProperty(XI_PROP_XTEST_DEVICE),
+                               XA_INTEGER, 8, PropModeReplace, 1, &dummy,
+                               FALSE);
+        XISetDevicePropertyDeletable(*keybd,
+                                     XIGetKnownProperty(XI_PROP_XTEST_DEVICE),
+                                     FALSE);
+        XIRegisterPropertyHandler(*keybd, DeviceSetXTestProperty, NULL, NULL);
+    }
+
+    free(xtestname);
+
+    return retval;
+}
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
 
 /**
  * If master is NULL, return TRUE if the given device is an xtest device or

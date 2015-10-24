@@ -1,6 +1,10 @@
 noinst_LTLIBRARIES = libcomposite.la
 
-AM_CFLAGS = $(DIX_CFLAGS)
+#AM_CFLAGS = $(DIX_CFLAGS)
+AM_CFLAGS = \
+	-DHAVE_XORG_CONFIG_H \
+	@DIX_CFLAGS@ @XORG_CFLAGS@
+
 
 if XORG
 sdk_HEADERS = compositeext.h
@@ -12,4 +16,4 @@ libcomposite_la_SOURCES = 	\
 	compint.h		\
 	compinit.c		\
 	compoverlay.c		\
-	compwindow.c		
+	compwindow.c

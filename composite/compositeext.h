@@ -35,6 +35,10 @@ extern _X_EXPORT Bool CompositeRegisterAlternateVisuals(ScreenPtr pScreen,
                                                         VisualID * vids,
                                                         int nVisuals);
 
+extern _X_EXPORT Bool CompositeRegisterImplicitRedirectionException(ScreenPtr pScreen,
+                                                                    VisualID parentVisual,
+                                                                    VisualID winVisual);
+
 extern _X_EXPORT RESTYPE CompositeClientWindowType;
 
 #ifdef _F_INPUT_REDIRECTION_
@@ -58,7 +62,27 @@ extern _X_EXPORT void CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
                          int       y,
                          int       *screenX,
                          int       *screenY);
+
+#ifdef _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+extern _X_EXPORT void CompositeXYScreenFromWindowLeftBufferCoordinate (WindowPtr pWin,
+                         int       x,
+                         int       y,
+                         int       *screenX,
+                         int       *screenY);
+#endif  // _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+
 extern _X_EXPORT int CompositeSetCoordinateTransform (ClientPtr pClient, WindowPtr pWin, PictTransformPtr pTransform);
+
+typedef int (*CompositeSetTransformPtr) (WindowPtr pWin,
+                                         PictTransformPtr pTransform);
+
+typedef struct {
+    CompositeSetTransformPtr SetTransform;
+} CompositeInfoRec, *CompositeInfoPtr;
+
+extern _X_EXPORT Bool CompositeScreenInit(ScreenPtr pScreen, CompositeInfoPtr info);
+extern _X_EXPORT void CompositeCloseScreen(ScreenPtr pScreen);
+
 #endif //_F_INPUT_REDIRECTION_
 
 #endif                          /* _COMPOSITEEXT_H_ */

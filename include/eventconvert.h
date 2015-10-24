@@ -29,7 +29,6 @@
 #include "events.h"
 #include "eventstr.h"
 
-#define FP1616(integral, frac) ((integral) * (1 << 16) + (frac) * (1 << 16))
 #ifdef _F_INPUT_REDIRECTION_
 #define AXIS_LABEL_PROP_ABS_X           "Abs X"
 #define AXIS_LABEL_PROP_ABS_Y           "Abs Y"

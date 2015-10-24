@@ -79,3 +79,9 @@ core
 doltcompile
 doltlibtool
 xserver.ent
+# Eclipse things
+.cproject
+.project
+.settings/
+Debug/
+

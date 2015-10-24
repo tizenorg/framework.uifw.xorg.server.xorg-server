@@ -64,6 +64,7 @@
 #include "mi.h"
 #include "mipointer.h"
 #include "rootless.h"
+#include "rootlessCommon.h"
 #include "x-hash.h"
 #include "x-hook.h"
 #include "driWrap.h"
@@ -380,6 +381,11 @@ DRICreateSurface(ScreenPtr pScreen, Drawable id,
     DRIDrawablePrivPtr pDRIDrawablePriv;
 
     if (pDrawable->type == DRAWABLE_WINDOW) {
+        /* <rdar://problem/12338921>
+         * http://bugs.winehq.org/show_bug.cgi?id=31751
+         */
+        RootlessStopDrawing((WindowPtr)pDrawable, FALSE);
+
         pDRIDrawablePriv = CreateSurfaceForWindow(pScreen,
                                                   (WindowPtr)pDrawable, &wid);
 
@@ -449,7 +455,7 @@ DRICreateSurface(ScreenPtr pScreen, Drawable id,
                                 pDRIDrawablePriv->sid), pDRIDrawablePriv);
 
         /* track this in case this window is destroyed */
-        AddResource(id, DRIDrawablePrivResType, (pointer)pDrawable);
+        AddResource(id, DRIDrawablePrivResType, (void *)pDrawable);
 
         /* Initialize shape */
         DRIUpdateSurface(pDRIDrawablePriv, pDrawable);
@@ -523,7 +529,7 @@ DRIDestroySurface(ScreenPtr pScreen, Drawable id, DrawablePtr pDrawable,
  * drops to <= 0, or the window/pixmap is destroyed.
  */
 Bool
-DRIDrawablePrivDelete(pointer pResource, XID id)
+DRIDrawablePrivDelete(void *pResource, XID id)
 {
     DrawablePtr pDrawable = (DrawablePtr)pResource;
     DRIScreenPrivPtr pDRIPriv = DRI_SCREEN_PRIV(pDrawable->pScreen);
@@ -823,7 +829,7 @@ DRICreatePixmap(ScreenPtr pScreen, Drawable id,
 
     dixSetPrivate(&pPix->devPrivates, DRIPixmapBufferPrivKey, shared);
 
-    AddResource(id, DRIDrawablePrivResType, (pointer)pDrawable);
+    AddResource(id, DRIDrawablePrivResType, (void *)pDrawable);
 
     return TRUE;
 }
@@ -878,7 +884,7 @@ DRIFreePixmapImp(DrawablePtr pDrawable)
     shm_unlink(shared->shmPath);
     free(shared);
 
-    dixSetPrivate(&pPix->devPrivates, DRIPixmapBufferPrivKey, (pointer)NULL);
+    dixSetPrivate(&pPix->devPrivates, DRIPixmapBufferPrivKey, (void *)NULL);
 
     return TRUE;
 }

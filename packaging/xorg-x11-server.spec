@@ -1,12 +1,13 @@
 Name:	    xorg-x11-server
 Summary:    X.Org X11 X server
-Version:    1.13.30
-Release:    3
+Version:    1.16.9.2
+Release:    0
 Group:      System/X11
 License:    MIT
 URL:        http://www.x.org
 Source0:    %{name}-%{version}.tar.gz
 Requires:   libdrm2 >= 2.4.0
+BuildRequires:  libgcrypt-devel
 BuildRequires:  pkgconfig(xorg-macros)
 BuildRequires:  pkgconfig(fontutil)
 BuildRequires:  pkgconfig(xtrans)
@@ -30,7 +31,7 @@ BuildRequires:  pkgconfig(inputproto)
 BuildRequires:  pkgconfig(fontsproto)
 BuildRequires:  pkgconfig(videoproto)
 BuildRequires:  pkgconfig(xf86vidmodeproto)
-BuildRequires:  xorg-x11-proto-gesture
+BuildRequires:  pkgconfig(gestureproto)
 BuildRequires:  pkgconfig(xdmcp)
 BuildRequires:  pkgconfig(xfont)
 BuildRequires:  pkgconfig(xkbfile)
@@ -38,11 +39,16 @@ BuildRequires:  pkgconfig(pixman-1)
 BuildRequires:  pkgconfig(xv)
 BuildRequires:  pkgconfig(libudev)
 BuildRequires:  pkgconfig(libdrm)
-BuildRequires:  libpciaccess-devel
-BuildRequires:  libgcrypt-devel
-BuildRequires:  xorg-x11-proto-hwc
+BuildRequires:  pkgconfig(pciaccess)
+BuildRequires:  pkgconfig(hwcproto)
+BuildRequires:  pkgconfig(hwaproto)
 BuildRequires:  pkgconfig(libsystemd-daemon)
-
+BuildRequires:  pkgconfig(dri3proto)
+BuildRequires:  pkgconfig(presentproto)
+BuildRequires:  pkgconfig(xshmfence)
+BuildRequires:  pkgconfig(ttrace)
+BuildRequires:  pkgconfig(vasum)
+BuildRequires:  pkgconfig(dlog)
 
 %description
 Description: %{summary}
@@ -103,12 +109,23 @@ drivers, input drivers, or other X modules should install this package.
 
 %build
 
-%autogen -i -v -f
-%configure \
+%if "%{?tizen_profile_name}" == "mobile"
+  export CFLAGS+=" "
+%else
+  %if "%{?tizen_profile_name}" == "wearable"
+    export CFLAGS+=" "
+  %else
+    %if "%{?tizen_profile_name}" == "tv"
+      export CFLAGS+=" -D_F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_ -D_F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_ "
+    %endif
+  %endif
+%endif
+
+%autogen \
 	--disable-strict-compilation \
 	--disable-static \
 	--disable-debug \
-	--disable-unit-tests \
+	--enable-unit-tests \
 	--disable-sparkle \
 	--disable-builddocs \
 	--disable-install-libxf86config \
@@ -123,7 +140,7 @@ drivers, input drivers, or other X modules should install this package.
 	--enable-xv \
 	--enable-xvmc \
 	--disable-dga \
-	--disable-screensaver \
+	--enable-screensaver \
 	--enable-xdmcp \
 	--enable-xdm-auth-1 \
 	--disable-glx \
@@ -164,9 +181,13 @@ drivers, input drivers, or other X modules should install this package.
 	--disable-kdrive-evdev \
 	--disable-doc \
 	--disable-devel-doc \
+	--enable-present \
+	--enable-dri3 \
+	--disable-container \
+	--disable-dlog \
 	--without-dtrace \
 	--with-extra-module-dir="/usr/lib/xorg/extra-modules" \
-	--with-os-vendor="SLP(Samsung Linux Platform)" \
+	--with-os-vendor="Tizen Platform" \
 	--with-xkb-path=/etc/X11/xkb \
 	--with-xkb-output=/var/xkb \
 	--with-default-font-path="built-ins" \
@@ -174,8 +195,11 @@ drivers, input drivers, or other X modules should install this package.
 	--with-sha1=libgcrypt \
 	--enable-gestures \
 	--enable-hwc \
+	--enable-hwa \
 	--enable-ir \
 	--with-systemd-daemon \
+	--with-default-xkb-model="evdev" \
+	--enable-smack-util \
 	CFLAGS="${CFLAGS} \
 		-Wall -g \
 		-D_F_UDEV_DEBUG_ \
@@ -183,31 +207,64 @@ drivers, input drivers, or other X modules should install this package.
 		-D_F_NO_GRABTIME_UPDATE_ \
 		-D_F_NO_CATCH_SIGNAL_ \
 		-D_F_CHECK_NULL_CLIENT_ \
-		-D_F_COMP_OVL_PATCH \
 		-D_F_PUT_ON_PIXMAP_ \
 		-D_F_GETSTILL_GET_STOP_REQUEST_ \
 		-D_F_IGNORE_MOVE_SPRITE_FOR_FLOATING_POINTER_ \
-		-D_F_NOT_ALWAYS_CREATE_FRONTBUFFER_ \
-		-D_F_DISABLE_SCALE_TO_DESKTOP_FOR_DIRECT_TOUCH_ \
 		-D_F_GESTURE_EXTENSION_ \
 		-D_F_DO_NULL_CHECK_AT_XKBFAKEDEVICEBUTTON_ \
-		-D_F_DRI2_SWAP_REGION_ \
 		-D_F_NO_DAMAGE_DESCENDANT_FOR_HWC_ \
+		-D_F_NO_DAMAGE_DESCENDANT_FOR_HWA_ \
 		-D_F_NOT_USE_SW_CURSOR_ \
 		-D_F_DPMS_PHONE_CTRL_ \
+		-D_F_DRI2_NOT_ALWAYS_CREATE_FRONTBUFFER_ \
+		-D_F_DRI2_SWAP_REGION_ \
 		-D_F_DRI2_FIX_INVALIDATE \
+        -D_F_DRI2_COMMIT_FRAME_DONE_ \
+        -D_F_DRI2_SKIP_FRAME_NOT_VIEWABLE_ \
+        -D_F_DRI2_SKIP_FRAME_WINDOW_SIZE_CHANGED_ \
 		-D_F_RETURN_IF_INPUT_REMAINS_IN_WAITFORSTH_ \
 		-D_F_NO_INPUT_INIT_ \
 		-D_F_EXCLUDE_NON_MASK_SELECTED_FD_FROM_MAXCLIENTS_ \
 		-D_F_HWC_EXTENSION_ \
+		-D_F_HWA_EXTENSION_ \
 		-D_F_MIEQ_SPRITEINFO_NULL_CHECK_ \
 		-D_F_DO_NOT_COPY_IN_RESIZE_WINDOW \
 		-D_F_SET_XKB_DEFAULT_OPTIONS_FROM_CONFIGURE_ \
 		-D_F_INPUT_REDIRECTION_ \
+		-D_F_SNIFF_MIEQ_ \
+		-D_F_SET_PROPERTY_MT_ \
+		-D_F_GET_CURRENT_SCREEN_ \
+        -D_F_EXYNOS_DRV_LOAD_ \
+        -D_F_CONTAINER_EXTENSION_ \
+        -D_F_SUPPORT_XTEST_TOUCH_EVENT_ \
+        -D_F_PRESENT_PIXMAP_SWAP_ \
+        -D_F_PRESENT_SYNC_DRAW_DONE_ \
+        -D_F_PRESENT_SELECTIVE_COMPOSITE_ \
+        -D_F_PRESENT_HWC_FLIP_ \
+        -D_F_PRESENT_SCANOUT_NOTIFY_ \
+        -D_F_ADD_HOOK_PROC_COMP_REDIRECT_UNREDIRECT_ \
+        -D_F_PRESENT_NOT_USE_FAKE_VBLANK_ \
+        -D_ENABLE_PRIVILEGE_CHECK_ON_XTEST_DEVICE_API_ \
+        -D_F_XV_PUTSTILL_CHECK_PRIVILEGE_ \
+        -D_XV_REPUTORSTOP_CHECK_XV_OFF_ \
+        -D_F_XV_DO_NOT_CHECK_OBSCURED_ \
+        -D_ADD_HOOK_FOR_WARP_POINTER_ \
+        -D_F_DRI2_RUNTIME_DISABLE_EXT_ \
+        -D_F_RUN_TIME_DISABLE_EXTENSION_ \
+	-D_F_NO_IMPLICIT_REDIRECT_ \
+%if "%{?TIZEN_PRODUCT_TV}" == "1"
+        -D_F_DRI2_CHECK_SERIALNUMBER_ \
+        -D_F_UDEV_MONITORING_WITH_KERNEL_UEVENT_ \
+        -D_F_PREVENT_CURSOR_FLICKER_ \
+        -D_F_XV_DRAW_CHECK_NULL_
+%else
+        -D_F_DRI2_CHECK_SERIALNUMBER_
+%endif
         " \
 	CPPFLAGS="${CPPFLAGS} "
 
 #excluded macros
+#       -D_F_PRESENT_VBLANK_PENDING_ \
 #		-D_F_DYNAMIC_MIEQ_ \
 #		-D_F_NO_FLOATINGDEVICE_ERROR_ \
 #		-D_F_ENABLE_XI2_SENDEVENT_ \
@@ -231,8 +288,13 @@ rm -f %{buildroot}/usr/lib/xorg/modules/libxaa.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libwfb.so
 rm -f %{buildroot}/usr/lib/xorg/modules/libxf8_16bpp.so
 
+rm -f %{buildroot}/usr/lib/xorg/modules/libshadow.so
+rm -f %{buildroot}/usr/lib/xorg/modules/libshadowfb.so
+rm -f %{buildroot}/usr/lib/xorg/modules/libint10.so
+
 rm -f %{buildroot}/var/xkb/README.compiled
 rm -f %{buildroot}/usr/share/X11/xorg.conf.d/10-evdev.conf
+rm -f %{buildroot}/usr/share/X11/xorg.conf.d/10-quirks.conf
 rm -rf %{buildroot}/usr/share/man/*
 
 #mkdir -p %{buildroot}/usr/share/X11/xorg.conf.d
@@ -260,7 +322,6 @@ rm -rf %{buildroot}/usr/share/man/*
 #cp {,%{inst_srcdir}/}xserver.ent.in
 #cp xkb/README.compiled %{inst_srcdir}/xkb
 #cp hw/xfree86/xorgconf.cpp %{inst_srcdir}/hw/xfree86
-
 
 %clean
 rm -rf $RPM_BUILD_ROOT

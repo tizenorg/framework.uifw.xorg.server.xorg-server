@@ -279,7 +279,7 @@ AccessXStickyKeysTurnOff(DeviceIntPtr dev, xkbControlsNotify * pCN)
 }                               /* AccessXStickyKeysTurnOff */
 
 static CARD32
-AccessXKRGExpire(OsTimerPtr timer, CARD32 now, pointer arg)
+AccessXKRGExpire(OsTimerPtr timer, CARD32 now, void *arg)
 {
     xkbControlsNotify cn;
     DeviceIntPtr dev = arg;
@@ -291,8 +291,8 @@ AccessXKRGExpire(OsTimerPtr timer, CARD32 now, pointer arg)
         return 4000;
     }
     xkbi->krgTimerActive = _OFF_TIMER;
-    cn.keycode = 0;
-    cn.eventType = 0;
+    cn.keycode = xkbi->slowKeyEnableKey;
+    cn.eventType = KeyPress;
     cn.requestMajor = 0;
     cn.requestMinor = 0;
     if (xkbi->desc->ctrls->enabled_ctrls & XkbSlowKeysMask) {
@@ -304,11 +304,12 @@ AccessXKRGExpire(OsTimerPtr timer, CARD32 now, pointer arg)
         LogMessage(X_INFO, "XKB SlowKeys are now enabled. Hold shift to disable.\n");
     }
 
+    xkbi->slowKeyEnableKey = 0;
     return 0;
 }
 
 static CARD32
-AccessXRepeatKeyExpire(OsTimerPtr timer, CARD32 now, pointer arg)
+AccessXRepeatKeyExpire(OsTimerPtr timer, CARD32 now, void *arg)
 {
     DeviceIntPtr dev = (DeviceIntPtr) arg;
     XkbSrvInfoPtr xkbi = dev->key->xkbInfo;
@@ -330,7 +331,7 @@ AccessXCancelRepeatKey(XkbSrvInfoPtr xkbi, KeyCode key)
 }
 
 static CARD32
-AccessXSlowKeyExpire(OsTimerPtr timer, CARD32 now, pointer arg)
+AccessXSlowKeyExpire(OsTimerPtr timer, CARD32 now, void *arg)
 {
     DeviceIntPtr keybd;
     XkbSrvInfoPtr xkbi;
@@ -369,7 +370,7 @@ AccessXSlowKeyExpire(OsTimerPtr timer, CARD32 now, pointer arg)
                 xkbi->repeatKeyTimer = TimerSet(xkbi->repeatKeyTimer,
                                                 0, ctrls->repeat_delay,
                                                 AccessXRepeatKeyExpire,
-                                                (pointer) keybd);
+                                                (void *) keybd);
             }
         }
     }
@@ -377,7 +378,7 @@ AccessXSlowKeyExpire(OsTimerPtr timer, CARD32 now, pointer arg)
 }
 
 static CARD32
-AccessXBounceKeyExpire(OsTimerPtr timer, CARD32 now, pointer arg)
+AccessXBounceKeyExpire(OsTimerPtr timer, CARD32 now, void *arg)
 {
     XkbSrvInfoPtr xkbi = ((DeviceIntPtr) arg)->key->xkbInfo;
 
@@ -386,7 +387,7 @@ AccessXBounceKeyExpire(OsTimerPtr timer, CARD32 now, pointer arg)
 }
 
 static CARD32
-AccessXTimeoutExpire(OsTimerPtr timer, CARD32 now, pointer arg)
+AccessXTimeoutExpire(OsTimerPtr timer, CARD32 now, void *arg)
 {
     DeviceIntPtr dev = (DeviceIntPtr) arg;
     XkbSrvInfoPtr xkbi = dev->key->xkbInfo;
@@ -462,15 +463,16 @@ AccessXFilterPressEvent(DeviceEvent *event, DeviceIntPtr keybd)
     if (ctrls->enabled_ctrls & XkbAccessXKeysMask) {
         /* check for magic sequences */
         if ((sym[0] == XK_Shift_R) || (sym[0] == XK_Shift_L)) {
+            xkbi->slowKeyEnableKey = key;
             if (XkbAX_NeedFeedback(ctrls, XkbAX_SlowWarnFBMask)) {
                 xkbi->krgTimerActive = _KRG_WARN_TIMER;
                 xkbi->krgTimer = TimerSet(xkbi->krgTimer, 0, 4000,
-                                          AccessXKRGExpire, (pointer) keybd);
+                                          AccessXKRGExpire, (void *) keybd);
             }
             else {
                 xkbi->krgTimerActive = _KRG_TIMER;
                 xkbi->krgTimer = TimerSet(xkbi->krgTimer, 0, 8000,
-                                          AccessXKRGExpire, (pointer) keybd);
+                                          AccessXKRGExpire, (void *) keybd);
             }
             if (!(ctrls->enabled_ctrls & XkbSlowKeysMask)) {
                 CARD32 now = GetTimeInMillis();
@@ -512,7 +514,7 @@ AccessXFilterPressEvent(DeviceEvent *event, DeviceIntPtr keybd)
         xkbi->slowKey = key;
         xkbi->slowKeysTimer = TimerSet(xkbi->slowKeysTimer,
                                        0, ctrls->slow_keys_delay,
-                                       AccessXSlowKeyExpire, (pointer) keybd);
+                                       AccessXSlowKeyExpire, (void *) keybd);
         ignoreKeyEvent = TRUE;
     }
 
@@ -544,7 +546,7 @@ AccessXFilterPressEvent(DeviceEvent *event, DeviceIntPtr keybd)
                     xkbi->repeatKeyTimer = TimerSet(xkbi->repeatKeyTimer,
                                                     0, ctrls->repeat_delay,
                                                     AccessXRepeatKeyExpire,
-                                                    (pointer) keybd);
+                                                    (void *) keybd);
                 }
             }
         }
@@ -606,7 +608,7 @@ AccessXFilterReleaseEvent(DeviceEvent *event, DeviceIntPtr keybd)
         xkbi->bounceKeysTimer = TimerSet(xkbi->bounceKeysTimer, 0,
                                          ctrls->debounce_delay,
                                          AccessXBounceKeyExpire,
-                                         (pointer) keybd);
+                                         (void *) keybd);
     }
 
     /* Don't transmit the KeyRelease if SlowKeys is turned on and
@@ -649,7 +651,7 @@ AccessXFilterReleaseEvent(DeviceEvent *event, DeviceIntPtr keybd)
         xkbi->lastPtrEventTime = 0;
         xkbi->krgTimer = TimerSet(xkbi->krgTimer, 0,
                                   ctrls->ax_timeout * 1000,
-                                  AccessXTimeoutExpire, (pointer) keybd);
+                                  AccessXTimeoutExpire, (void *) keybd);
         xkbi->krgTimerActive = _ALL_TIMEOUT_TIMER;
     }
     else if (xkbi->krgTimerActive != _OFF_TIMER) {
@@ -721,22 +723,26 @@ ProcessPointerEvent(InternalEvent *ev, DeviceIntPtr mouse)
         changed |= XkbPointerButtonMask;
     }
     else if (event->type == ET_ButtonRelease) {
-        if (xkbi) {
-            xkbi->lockedPtrButtons &= ~(1 << (event->detail.key & 0x7));
+        if (IsMaster(dev)) {
+            DeviceIntPtr source;
+            int rc;
 
-            if (IsMaster(dev)) {
-                DeviceIntPtr source;
-                int rc;
+            rc = dixLookupDevice(&source, event->sourceid, serverClient,
+                    DixWriteAccess);
+            if (rc != Success)
+                ErrorF("[xkb] bad sourceid '%d' on button release event.\n",
+                        event->sourceid);
+            else if (!IsXTestDevice(source, GetMaster(dev, MASTER_POINTER))) {
+                DeviceIntPtr xtest_device;
 
-                rc = dixLookupDevice(&source, event->sourceid, serverClient,
-                                     DixWriteAccess);
-                if (rc != Success)
-                    ErrorF("[xkb] bad sourceid '%d' on button release event.\n",
-                           event->sourceid);
-                else if (!IsXTestDevice(source, GetMaster(dev, MASTER_POINTER)))
+                xtest_device = GetXTestDevice(GetMaster(dev, MASTER_POINTER));
+                if (button_is_down(xtest_device, ev->device_event.detail.button, BUTTON_PROCESSED))
                     XkbFakeDeviceButton(dev, FALSE, event->detail.key);
             }
         }
+
+        if (xkbi)
+            xkbi->lockedPtrButtons &= ~(1 << (event->detail.key & 0x7));
 
         changed |= XkbPointerButtonMask;
     }

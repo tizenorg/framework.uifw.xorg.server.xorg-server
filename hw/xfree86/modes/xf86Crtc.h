@@ -25,9 +25,6 @@
 
 #include <edid.h>
 #include "randrstr.h"
-#if XF86_MODES_RENAME
-#include "xf86Rename.h"
-#endif
 #include "xf86Modes.h"
 #include "xf86Cursor.h"
 #include "xf86i2c.h"
@@ -191,12 +188,16 @@ typedef struct _xf86CrtcFuncs {
      */
     void
      (*load_cursor_image) (xf86CrtcPtr crtc, CARD8 *image);
+    Bool
+     (*load_cursor_image_check) (xf86CrtcPtr crtc, CARD8 *image);
 
     /**
      * Load ARGB image
      */
     void
      (*load_cursor_argb) (xf86CrtcPtr crtc, CARD32 *image);
+    Bool
+     (*load_cursor_argb_check) (xf86CrtcPtr crtc, CARD32 *image);
 
     /**
      * Clean up driver-specific bits of the crtc
@@ -241,7 +242,7 @@ struct _xf86Crtc {
     /**
      * Desired state of this CRTC
      *
-     * Set when this CRTC should be driving one or more outputs 
+     * Set when this CRTC should be driving one or more outputs
      */
     Bool enabled;
 
@@ -303,7 +304,7 @@ struct _xf86Crtc {
      */
     Bool cursor_argb;
     /**
-     * Track whether cursor is within CRTC range 
+     * Track whether cursor is within CRTC range
      */
     Bool cursor_in_range;
     /**
@@ -497,6 +498,21 @@ typedef struct _xf86OutputFuncs {
      */
     void
      (*destroy) (xf86OutputPtr output);
+
+//#ifdef _F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_
+
+    /**
+    * Gets the expected width & height of framebuffer after stereo mode setting
+    **/
+     void (*get_stereo_buffer_size)(xf86OutputPtr output, int planeID,
+          short* width, short* height);
+
+    /**
+    * Gets the geometry of drawing rectangle after stereo mode setting
+    **/
+     void (*get_drawing_rect)(xf86OutputPtr output, int planeID,
+           DrawRect* rect[RECT_MAX]);
+//#endif
 } xf86OutputFuncsRec, *xf86OutputFuncsPtr;
 
 #define XF86_OUTPUT_VERSION 2
@@ -607,7 +623,7 @@ struct _xf86Output {
 #else
     void *randr_output;
 #endif
-    /** 
+    /**
      * Desired initial panning
      * Added in ABI version 2
      */
@@ -863,6 +879,11 @@ extern _X_EXPORT void
 extern _X_EXPORT Bool
  xf86SaveScreen(ScreenPtr pScreen, int mode);
 
+//#ifdef _F_XF86_DISABLE_UNUSED_FUNC_RESCHANGE_
+extern _X_EXPORT void
+xf86DisableUnusedFunctionsResChange(ScrnInfoPtr pScrn, Bool is_res_change);
+//#endif
+
 extern _X_EXPORT void
  xf86DisableUnusedFunctions(ScrnInfoPtr pScrn);
 
@@ -921,7 +942,7 @@ extern _X_EXPORT void
  xf86CrtcSetScreenSubpixelOrder(ScreenPtr pScreen);
 
 /*
- * Get a standard string name for a connector type 
+ * Get a standard string name for a connector type
  */
 extern _X_EXPORT const char *xf86ConnectorGetName(xf86ConnectorType connector);
 
@@ -946,7 +967,7 @@ extern _X_EXPORT Bool
  * Called when anything on the screen is reconfigured.
  *
  * Reloads cursor images as needed, then adjusts cursor positions.
- * 
+ *
  * Driver should call this from crtc commit function.
  */
 extern _X_EXPORT void

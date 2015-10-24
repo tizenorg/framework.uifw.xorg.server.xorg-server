@@ -136,12 +136,14 @@ AnimCurCursorLimits(DeviceIntPtr pDev,
 
 static void
 AnimCurScreenBlockHandler(ScreenPtr pScreen,
-                          pointer pTimeout, pointer pReadmask)
+                          void *pTimeout, void *pReadmask)
 {
     AnimCurScreenPtr as = GetAnimCurScreen(pScreen);
     DeviceIntPtr dev;
     Bool activeDevice = FALSE;
     CARD32 now = 0, soonest = ~0;       /* earliest time to wakeup again */
+
+    Unwrap(as, pScreen, BlockHandler);
 
     for (dev = inputInfo.devices; dev; dev = dev->next) {
         if (IsPointerDevice(dev) && pScreen == dev->spriteInfo->anim.pScreen) {
@@ -180,7 +182,6 @@ AnimCurScreenBlockHandler(ScreenPtr pScreen,
     if (activeDevice)
         AdjustWaitForDelay(pTimeout, soonest - now);
 
-    Unwrap(as, pScreen, BlockHandler);
     (*pScreen->BlockHandler) (pScreen, pTimeout, pReadmask);
     if (activeDevice)
         Wrap(as, pScreen, BlockHandler, AnimCurScreenBlockHandler);
@@ -382,8 +383,7 @@ AnimCursorCreate(CursorPtr *cursors, CARD32 *deltas, int ncursor,
     ac->elts = (AnimCurElt *) (ac + 1);
 
     for (i = 0; i < ncursor; i++) {
-        cursors[i]->refcnt++;
-        ac->elts[i].pCursor = cursors[i];
+        ac->elts[i].pCursor = RefCursor(cursors[i]);
         ac->elts[i].delay = deltas[i];
     }
 

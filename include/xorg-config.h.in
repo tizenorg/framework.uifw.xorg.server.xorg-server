@@ -1,5 +1,5 @@
 /* xorg-config.h.in: not at all generated.                      -*- c -*-
- * 
+ *
  * This file differs from xorg-server.h.in in that -server is installed
  * with the rest of the SDK for external drivers/modules to use, whereas
  * -config is for internal use only (i.e. building the DDX).
@@ -45,8 +45,17 @@
 /* Path to installed libraries. */
 #undef DEFAULT_LIBRARY_PATH
 
-/* Path to server log file. */
+/* Default log location */
+#undef DEFAULT_LOGDIR
+
+/* Default logfile prefix */
 #undef DEFAULT_LOGPREFIX
+
+/* Default XDG_DATA dir under HOME */
+#undef DEFAULT_XDG_DATA_HOME
+
+/* Default log dir under XDG_DATA_HOME */
+#undef DEFAULT_XDG_DATA_HOME_LOGDIR
 
 /* Building DRI-capable DDX. */
 #undef XF86DRI
@@ -110,13 +119,18 @@
 #undef HAS_APERTURE_DRV
 
 /* Has backtrace support */
+#if SUPPORT_BACKTRACE
 #undef HAVE_BACKTRACE
+#endif
 
 /* Name of the period field in struct kbd_repeat */
 #undef LNX_KBD_PERIOD_NAME
 
 /* Have execinfo.h */
 #undef HAVE_EXECINFO_H
+
+/* Define to 1 if you have the <sys/mkdev.h> header file. */
+#undef HAVE_SYS_MKDEV_H
 
 /* Path to text files containing PCI IDs */
 #undef PCI_TXT_IDS_PATH
@@ -141,5 +155,17 @@
 
 /* Support HWC extension */
 #undef HWC
+
+/* Support HWA extension */
+#undef HWA
+
+/* Support Container extension */
+#undef CONTAINER
+
+/* Define to 1 if you have the `seteuid' function. */
+#undef HAVE_SETEUID
+
+/* Support APM/ACPI power management in the server */
+#undef XF86PM
 
 #endif /* _XORG_CONFIG_H_ */

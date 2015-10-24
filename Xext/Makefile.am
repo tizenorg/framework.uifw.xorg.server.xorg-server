@@ -1,6 +1,6 @@
-noinst_LTLIBRARIES = libXext.la
+noinst_LTLIBRARIES = libXext.la libXextdpmsstubs.la
 
-AM_CFLAGS = $(DIX_CFLAGS)
+AM_CFLAGS = $(DIX_CFLAGS) $(TTRACE_CFLAGS)
 
 if XORG
 sdk_HEADERS = xvdix.h xvmcext.h geext.h geint.h shmint.h syncsdk.h
@@ -18,7 +18,7 @@ BUILTIN_SRCS =			\
 	syncsrv.h		\
 	xcmisc.c		\
 	xtest.c
-BUILTIN_LIBS =
+BUILTIN_LIBS = $(TTRACE_LIBS)
 
 # Optional sources included if extension enabled by configure.ac rules
 
@@ -47,7 +47,7 @@ BUILTIN_SRCS  += $(SCREENSAVER_SRCS)
 endif
 
 # Xinerama extension: making multiple video devices act as one virtual screen
-XINERAMA_SRCS = panoramiX.c panoramiX.h panoramiXh.h panoramiXsrv.h panoramiXprocs.c panoramiXSwap.c 
+XINERAMA_SRCS = panoramiX.c panoramiX.h panoramiXh.h panoramiXsrv.h panoramiXprocs.c panoramiXSwap.c
 if XINERAMA
 BUILTIN_SRCS += $(XINERAMA_SRCS)
 if XORG
@@ -83,7 +83,7 @@ endif
 
 # Security extension: multi-level security to protect clients from each other
 XCSECURITY_SRCS = security.c securitysrv.h
-if XCSECURITY   
+if XCSECURITY
 BUILTIN_SRCS += $(XCSECURITY_SRCS)
 endif
 
@@ -99,10 +99,19 @@ if DPMSExtension
 BUILTIN_SRCS += $(DPMS_SRCS)
 endif
 
+# Smack utility
+SMACK_UTIL_SRCS = smack_util.c smack_util.h
+if SMACK_UTIL
+BUILTIN_SRCS += $(SMACK_UTIL_SRCS)
+BUILTIN_LIBS += $(SMACK_UTIL_LIBS)
+endif
+
 # Now take all of the above, mix well, bake for 10 minutes and get libXext*.la
 
 libXext_la_SOURCES =		$(BUILTIN_SRCS)
 libXext_la_LIBADD =		$(BUILTIN_LIBS)
+
+libXextdpmsstubs_la_SOURCES = dpmsstubs.c
 
 EXTRA_DIST = \
 	$(MITSHM_SRCS) \
@@ -116,5 +125,6 @@ EXTRA_DIST = \
 	$(XINERAMA_SRCS) \
 	$(BIGFONT_SRCS) \
 	$(DPMS_SRCS) \
-        $(GE_SRCS)
+	$(GE_SRCS) \
+	$(SMACK_UTIL_SRCS)
 

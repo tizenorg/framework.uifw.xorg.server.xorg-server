@@ -93,9 +93,10 @@ SOFTWARE.
 static void RecalculateMasterButtons(DeviceIntPtr slave);
 
 static void
-DeviceSetTransform(DeviceIntPtr dev, float *transform)
+DeviceSetTransform(DeviceIntPtr dev, float *transform_data)
 {
     struct pixman_f_transform scale;
+    struct pixman_f_transform transform;
     double sx, sy;
     int x, y;
 
@@ -111,8 +112,8 @@ DeviceSetTransform(DeviceIntPtr dev, float *transform)
      *  Transform is the user supplied (affine) transform
      *  InvScale scales coordinates back up into their native range
      */
-    sx = dev->valuator->axes[0].max_value - dev->valuator->axes[0].min_value;
-    sy = dev->valuator->axes[1].max_value - dev->valuator->axes[1].min_value;
+    sx = dev->valuator->axes[0].max_value - dev->valuator->axes[0].min_value + 1;
+    sy = dev->valuator->axes[1].max_value - dev->valuator->axes[1].min_value + 1;
 
     /* invscale */
     pixman_f_transform_init_scale(&scale, sx, sy);
@@ -122,16 +123,21 @@ DeviceSetTransform(DeviceIntPtr dev, float *transform)
     /* transform */
     for (y = 0; y < 3; y++)
         for (x = 0; x < 3; x++)
-            dev->transform.m[y][x] = *transform++;
+            transform.m[y][x] = *transform_data++;
 
-    pixman_f_transform_multiply(&dev->transform, &scale, &dev->transform);
+    pixman_f_transform_multiply(&dev->scale_and_transform, &scale, &transform);
 
     /* scale */
     pixman_f_transform_init_scale(&scale, 1.0 / sx, 1.0 / sy);
     scale.m[0][2] = -dev->valuator->axes[0].min_value / sx;
     scale.m[1][2] = -dev->valuator->axes[1].min_value / sy;
 
-    pixman_f_transform_multiply(&dev->transform, &dev->transform, &scale);
+    pixman_f_transform_multiply(&dev->scale_and_transform, &dev->scale_and_transform, &scale);
+
+    /* remove translation component for relative movements */
+    dev->relative_transform = transform;
+    dev->relative_transform.m[0][2] = 0;
+    dev->relative_transform.m[1][2] = 0;
 }
 
 /**
@@ -145,9 +151,11 @@ DeviceSetProperty(DeviceIntPtr dev, Atom property, XIPropertyValuePtr prop,
         if (prop->format != 8 || prop->type != XA_INTEGER || prop->size != 1)
             return BadValue;
 
-        /* Don't allow disabling of VCP/VCK */
-        if ((dev == inputInfo.pointer ||dev ==
-             inputInfo.keyboard) &&!(*(CARD8 *) prop->data))
+        /* Don't allow disabling of VCP/VCK or XTest devices */
+        if ((dev == inputInfo.pointer ||
+             dev == inputInfo.keyboard ||
+             IsXTestDevice(dev, NULL))
+            &&!(*(CARD8 *) prop->data))
             return BadAccess;
 
         if (!checkonly) {
@@ -273,7 +281,6 @@ AddInputDevice(ClientPtr client, DeviceProc deviceProc, Bool autoStart)
     dev->deviceGrab.grabTime = currentTime;
     dev->deviceGrab.ActivateGrab = ActivateKeyboardGrab;
     dev->deviceGrab.DeactivateGrab = DeactivateKeyboardGrab;
-    dev->deviceGrab.activeGrab = AllocGrab();
     dev->deviceGrab.sync.event = calloc(1, sizeof(DeviceEvent));
 
     XkbSetExtension(dev, ProcessKeyboardEvent);
@@ -281,7 +288,7 @@ AddInputDevice(ClientPtr client, DeviceProc deviceProc, Bool autoStart)
     dev->coreEvents = TRUE;
 
     /* sprite defaults */
-    dev->spriteInfo = (SpriteInfoPtr) & dev[1];
+    dev->spriteInfo = (SpriteInfoPtr) &dev[1];
 
     /*  security creation/labeling check
      */
@@ -306,6 +313,10 @@ AddInputDevice(ClientPtr client, DeviceProc deviceProc, Bool autoStart)
     /* unity matrix */
     memset(transform, 0, sizeof(transform));
     transform[0] = transform[4] = transform[8] = 1.0f;
+    dev->relative_transform.m[0][0] = 1.0;
+    dev->relative_transform.m[1][1] = 1.0;
+    dev->relative_transform.m[2][2] = 1.0;
+    dev->scale_and_transform = dev->relative_transform;
 
     XIChangeDeviceProperty(dev, XIGetKnownProperty(XI_PROP_TRANSFORM),
                            XIGetKnownProperty(XATOM_FLOAT), 32,
@@ -375,7 +386,7 @@ EnableDevice(DeviceIntPtr dev, BOOL sendevent)
         }
         else {
             if (dev->coreEvents)
-                other = (IsPointerDevice(dev)) ? inputInfo.pointer :
+                other = (IsPointerDevice(dev)) ? inputInfo.pointer:
                     inputInfo.keyboard;
             else
                 other = NULL;   /* auto-float non-core devices */
@@ -404,6 +415,10 @@ EnableDevice(DeviceIntPtr dev, BOOL sendevent)
         flags[dev->id] |= XIDeviceEnabled;
         XISendDeviceHierarchyEvent(flags);
     }
+
+    // IsFloating condition was brought from latest version at freedesktop xserver
+    if (!IsMaster(dev) && !IsFloating(dev))
+        XkbPushLockedStateToSlaves(GetMaster(dev, MASTER_KEYBOARD), 0, 0);
 
     RecalculateMasterButtons(dev);
 
@@ -440,6 +455,7 @@ DisableDevice(DeviceIntPtr dev, BOOL sendevent)
     if (*prev != dev)
         return FALSE;
 
+    TouchEndPhysicallyActiveTouches(dev);
     ReleaseButtonsAndKeys(dev);
     SyncRemoveDeviceIdleTime(dev->idle_counter);
     dev->idle_counter = NULL;
@@ -510,6 +526,12 @@ DisableAllDevices(void)
 {
     DeviceIntPtr dev, tmp;
 
+    /* Disable slave devices first, excluding XTest devices */
+    nt_list_for_each_entry_safe(dev, tmp, inputInfo.devices, next) {
+        if (!IsXTestDevice(dev, NULL) && !IsMaster(dev))
+            DisableDevice(dev, FALSE);
+    }
+    /* Disable XTest devices */
     nt_list_for_each_entry_safe(dev, tmp, inputInfo.devices, next) {
         if (!IsMaster(dev))
             DisableDevice(dev, FALSE);
@@ -568,7 +590,7 @@ ActivateDevice(DeviceIntPtr dev, BOOL sendevent)
  * The actual task of ringing the bell is the job of the DDX.
  */
 static void
-CoreKeyboardBell(int volume, DeviceIntPtr pDev, pointer arg, int something)
+CoreKeyboardBell(int volume, DeviceIntPtr pDev, void *arg, int something)
 {
     KeybdCtrl *ctrl = arg;
 
@@ -668,6 +690,133 @@ CorePointerProc(DeviceIntPtr pDev, int what)
 #undef NAXES
 }
 
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+int
+CoreTouchProc(DeviceIntPtr pDev, int what)
+{
+#define NBUTTONS 10
+#define NTOUCHES 10
+#define NAXES MAX_VALUATORS
+    int i = 0;
+    Atom axes_labels[NAXES] = { 0 };
+    Atom atom = None;
+    Atom btn_labels[NBUTTONS] = { 0 };
+    BYTE map[NBUTTONS + 1] = { 0 };
+    ScreenPtr scr = screenInfo.screens[0];
+    static char* abs_labels[] = {
+        AXIS_LABEL_PROP_ABS_X,              /* 0x00 */
+        AXIS_LABEL_PROP_ABS_Y,              /* 0x01 */
+        AXIS_LABEL_PROP_ABS_Z,              /* 0x02 */
+        AXIS_LABEL_PROP_ABS_RX,             /* 0x03 */
+        AXIS_LABEL_PROP_ABS_RY,             /* 0x04 */
+        AXIS_LABEL_PROP_ABS_RZ,             /* 0x05 */
+        AXIS_LABEL_PROP_ABS_THROTTLE,       /* 0x06 */
+        AXIS_LABEL_PROP_ABS_RUDDER,         /* 0x07 */
+        AXIS_LABEL_PROP_ABS_WHEEL,          /* 0x08 */
+        AXIS_LABEL_PROP_ABS_GAS,            /* 0x09 */
+        AXIS_LABEL_PROP_ABS_BRAKE,          /* 0x0a */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_HAT0X,          /* 0x10 */
+        AXIS_LABEL_PROP_ABS_HAT0Y,          /* 0x11 */
+        AXIS_LABEL_PROP_ABS_HAT1X,          /* 0x12 */
+        AXIS_LABEL_PROP_ABS_HAT1Y,          /* 0x13 */
+        AXIS_LABEL_PROP_ABS_HAT2X,          /* 0x14 */
+        AXIS_LABEL_PROP_ABS_HAT2Y,          /* 0x15 */
+        AXIS_LABEL_PROP_ABS_HAT3X,          /* 0x16 */
+        AXIS_LABEL_PROP_ABS_HAT3Y,          /* 0x17 */
+        AXIS_LABEL_PROP_ABS_PRESSURE,       /* 0x18 */
+        AXIS_LABEL_PROP_ABS_DISTANCE,       /* 0x19 */
+        AXIS_LABEL_PROP_ABS_TILT_X,         /* 0x1a */
+        AXIS_LABEL_PROP_ABS_TILT_Y,         /* 0x1b */
+        AXIS_LABEL_PROP_ABS_TOOL_WIDTH,     /* 0x1c */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_VOLUME          /* 0x20 */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MISC,           /* undefined */
+        AXIS_LABEL_PROP_ABS_MT_TOUCH_MAJOR, /* 0x30 */
+        AXIS_LABEL_PROP_ABS_MT_TOUCH_MINOR, /* 0x31 */
+        AXIS_LABEL_PROP_ABS_MT_WIDTH_MAJOR, /* 0x32 */
+        AXIS_LABEL_PROP_ABS_MT_WIDTH_MINOR, /* 0x33 */
+        AXIS_LABEL_PROP_ABS_MT_ORIENTATION, /* 0x34 */
+        AXIS_LABEL_PROP_ABS_MT_POSITION_X,  /* 0x35 */
+        AXIS_LABEL_PROP_ABS_MT_POSITION_Y,  /* 0x36 */
+        AXIS_LABEL_PROP_ABS_MT_TOOL_TYPE,   /* 0x37 */
+        AXIS_LABEL_PROP_ABS_MT_BLOB_ID,     /* 0x38 */
+        AXIS_LABEL_PROP_ABS_MT_TRACKING_ID, /* 0x39 */
+        AXIS_LABEL_PROP_ABS_MT_PRESSURE,    /* 0x3a */
+    };
+
+    switch (what) {
+    case DEVICE_INIT:
+    for (i = 1; i <= NBUTTONS; i++)
+            map[i] = i;
+
+        btn_labels[0] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_LEFT);
+        btn_labels[1] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_MIDDLE);
+        btn_labels[2] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_RIGHT);
+        btn_labels[3] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_WHEEL_UP);
+        btn_labels[4] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_WHEEL_DOWN);
+        btn_labels[5] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_HWHEEL_LEFT);
+        btn_labels[6] = XIGetKnownProperty(BTN_LABEL_PROP_BTN_HWHEEL_RIGHT);
+
+        for (i = 0; i < NAXES; i++) {
+            atom = XIGetKnownProperty(abs_labels[i]);
+            if (!atom) { /* Should not happen */
+                continue;
+            }
+            axes_labels[i] = atom;
+        }
+
+        if (!InitTouchDeviceStruct(pDev, MAX_VALUATORS, axes_labels,
+                    GetMotionHistorySize(), Absolute, NTOUCHES, XIDirectTouch,
+                    NBUTTONS, btn_labels, map)) {
+                    ErrorF("[CoreTouchProc] Could not initialize touch device '%s'. Out of memory.\n",
+                    pDev->name);
+                    return BadAlloc;
+        }
+
+        /* axisVal is per-screen, last.valuators is desktop-wide */
+        pDev->valuator->axisVal[0] = scr->width / 2;
+        pDev->last.valuators[0] = pDev->valuator->axisVal[0] + scr->x;
+        pDev->valuator->axisVal[1] = scr->height / 2;
+        pDev->last.valuators[1] = pDev->valuator->axisVal[1] + scr->y;
+        break;
+
+    case DEVICE_CLOSE:
+        break;
+
+    default:
+        break;
+    }
+
+    return Success;
+
+#undef NBUTTONS
+#undef NTOUCHES
+#undef NAXES
+}
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
+
 /**
  * Initialise the two core devices, VCP and VCK (see events.c).
  * Both devices are not tied to physical devices, but guarantee that there is
@@ -692,6 +841,9 @@ InitCoreDevices(void)
          FatalError("Failed to enable core devices.");
 
     InitXTestDevices();
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+    InitXTestHWKeyTouchDevices();
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
 }
 
 /**
@@ -732,7 +884,7 @@ InitAndStartDevices(void)
  * Free the given device class and reset the pointer to NULL.
  */
 static void
-FreeDeviceClass(int type, pointer *class)
+FreeDeviceClass(int type, void **class)
 {
     if (!(*class))
         return;
@@ -776,6 +928,7 @@ FreeDeviceClass(int type, pointer *class)
             free((*t)->touches[i].valuators);
         }
 
+        free((*t)->touches);
         free((*t));
         break;
     }
@@ -799,7 +952,7 @@ FreeDeviceClass(int type, pointer *class)
 }
 
 static void
-FreeFeedbackClass(int type, pointer *class)
+FreeFeedbackClass(int type, void **class)
 {
     if (!(*class))
         return;
@@ -887,19 +1040,19 @@ FreeAllDeviceClasses(ClassesPtr classes)
     if (!classes)
         return;
 
-    FreeDeviceClass(KeyClass, (pointer) &classes->key);
-    FreeDeviceClass(ValuatorClass, (pointer) &classes->valuator);
-    FreeDeviceClass(XITouchClass, (pointer) &classes->touch);
-    FreeDeviceClass(ButtonClass, (pointer) &classes->button);
-    FreeDeviceClass(FocusClass, (pointer) &classes->focus);
-    FreeDeviceClass(ProximityClass, (pointer) &classes->proximity);
+    FreeDeviceClass(KeyClass, (void *) &classes->key);
+    FreeDeviceClass(ValuatorClass, (void *) &classes->valuator);
+    FreeDeviceClass(XITouchClass, (void *) &classes->touch);
+    FreeDeviceClass(ButtonClass, (void *) &classes->button);
+    FreeDeviceClass(FocusClass, (void *) &classes->focus);
+    FreeDeviceClass(ProximityClass, (void *) &classes->proximity);
 
-    FreeFeedbackClass(KbdFeedbackClass, (pointer) &classes->kbdfeed);
-    FreeFeedbackClass(PtrFeedbackClass, (pointer) &classes->ptrfeed);
-    FreeFeedbackClass(IntegerFeedbackClass, (pointer) &classes->intfeed);
-    FreeFeedbackClass(StringFeedbackClass, (pointer) &classes->stringfeed);
-    FreeFeedbackClass(BellFeedbackClass, (pointer) &classes->bell);
-    FreeFeedbackClass(LedFeedbackClass, (pointer) &classes->leds);
+    FreeFeedbackClass(KbdFeedbackClass, (void *) &classes->kbdfeed);
+    FreeFeedbackClass(PtrFeedbackClass, (void *) &classes->ptrfeed);
+    FreeFeedbackClass(IntegerFeedbackClass, (void *) &classes->intfeed);
+    FreeFeedbackClass(StringFeedbackClass, (void *) &classes->stringfeed);
+    FreeFeedbackClass(BellFeedbackClass, (void *) &classes->bell);
+    FreeFeedbackClass(LedFeedbackClass, (void *) &classes->leds);
 
 }
 
@@ -925,8 +1078,9 @@ CloseDevice(DeviceIntPtr dev)
     if (dev->inited)
         (void) (*dev->deviceProc) (dev, DEVICE_CLOSE);
 
-    /* free sprite memory */
-    if (IsMaster(dev) && dev->spriteInfo->sprite)
+    FreeSprite(dev);
+
+    if (IsMaster(dev))
         screen->DeviceCursorCleanup(dev, screen);
 
     /* free acceleration info */
@@ -938,7 +1092,7 @@ CloseDevice(DeviceIntPtr dev)
 
     free(dev->name);
 
-    classes = (ClassesPtr) & dev->key;
+    classes = (ClassesPtr) &dev->key;
     FreeAllDeviceClasses(classes);
 
     if (IsMaster(dev)) {
@@ -946,8 +1100,6 @@ CloseDevice(DeviceIntPtr dev)
         FreeAllDeviceClasses(classes);
         free(classes);
     }
-
-    FreeSprite(dev);
 
     /* a client may have the device set as client pointer */
     for (j = 0; j < currentMaxClients; j++) {
@@ -957,7 +1109,8 @@ CloseDevice(DeviceIntPtr dev)
         }
     }
 
-    FreeGrab(dev->deviceGrab.activeGrab);
+    if (dev->deviceGrab.grab)
+        FreeGrab(dev->deviceGrab.grab);
     free(dev->deviceGrab.sync.event);
     free(dev->config_info);     /* Allocated in xf86ActivateDevice. */
     free(dev->last.scroll);
@@ -1032,8 +1185,28 @@ CloseDownDevices(void)
     inputInfo.pointer = NULL;
 
     XkbDeleteRulesDflts();
+    XkbDeleteRulesUsed();
 
     OsReleaseSignals();
+}
+
+/**
+ * Signal all devices that we're in the process of aborting.
+ * This function is called from a signal handler.
+ */
+void
+AbortDevices(void)
+{
+    DeviceIntPtr dev;
+    nt_list_for_each_entry(dev, inputInfo.devices, next) {
+        if (!IsMaster(dev))
+            (*dev->deviceProc) (dev, DEVICE_ABORT);
+    }
+
+    nt_list_for_each_entry(dev, inputInfo.off_devices, next) {
+        if (!IsMaster(dev))
+            (*dev->deviceProc) (dev, DEVICE_ABORT);
+    }
 }
 
 /**
@@ -1237,6 +1410,10 @@ InitButtonClassDeviceStruct(DeviceIntPtr dev, int numButtons, Atom *labels,
     ButtonClassPtr butc;
     int i;
 
+    BUG_RETURN_VAL(dev == NULL, FALSE);
+    BUG_RETURN_VAL(dev->button != NULL, FALSE);
+    BUG_RETURN_VAL(numButtons >= MAX_BUTTONS, FALSE);
+
     butc = calloc(1, sizeof(ButtonClassRec));
     if (!butc)
         return FALSE;
@@ -1297,8 +1474,7 @@ InitValuatorClassDeviceStruct(DeviceIntPtr dev, int numAxes, Atom *labels,
     int i;
     ValuatorClassPtr valc;
 
-    if (!dev)
-        return FALSE;
+    BUG_RETURN_VAL(dev == NULL, FALSE);
 
     if (numAxes > MAX_VALUATORS) {
         LogMessage(X_WARNING,
@@ -1327,7 +1503,7 @@ InitValuatorClassDeviceStruct(DeviceIntPtr dev, int numAxes, Atom *labels,
     valc->numMotionEvents = numMotionEvents;
     valc->motionHintWindow = NullWindow;
 
-    if (mode & OutOfProximity)
+    if ((mode & OutOfProximity) && !dev->proximity)
         InitProximityClassDeviceStruct(dev);
 
     dev->valuator = valc;
@@ -1407,6 +1583,9 @@ InitFocusClassDeviceStruct(DeviceIntPtr dev)
 {
     FocusClassPtr focc;
 
+    BUG_RETURN_VAL(dev == NULL, FALSE);
+    BUG_RETURN_VAL(dev->focus != NULL, FALSE);
+
     focc = malloc(sizeof(FocusClassRec));
     if (!focc)
         return FALSE;
@@ -1425,6 +1604,8 @@ Bool
 InitPtrFeedbackClassDeviceStruct(DeviceIntPtr dev, PtrCtrlProcPtr controlProc)
 {
     PtrFeedbackPtr feedc;
+
+    BUG_RETURN_VAL(dev == NULL, FALSE);
 
     feedc = malloc(sizeof(PtrFeedbackClassRec));
     if (!feedc)
@@ -1467,6 +1648,8 @@ InitStringFeedbackClassDeviceStruct(DeviceIntPtr dev,
     int i;
     StringFeedbackPtr feedc;
 
+    BUG_RETURN_VAL(dev == NULL, FALSE);
+
     feedc = malloc(sizeof(StringFeedbackClassRec));
     if (!feedc)
         return FALSE;
@@ -1501,6 +1684,8 @@ InitBellFeedbackClassDeviceStruct(DeviceIntPtr dev, BellProcPtr bellProc,
 {
     BellFeedbackPtr feedc;
 
+    BUG_RETURN_VAL(dev == NULL, FALSE);
+
     feedc = malloc(sizeof(BellFeedbackClassRec));
     if (!feedc)
         return FALSE;
@@ -1519,6 +1704,8 @@ Bool
 InitLedFeedbackClassDeviceStruct(DeviceIntPtr dev, LedCtrlProcPtr controlProc)
 {
     LedFeedbackPtr feedc;
+
+    BUG_RETURN_VAL(dev == NULL, FALSE);
 
     feedc = malloc(sizeof(LedFeedbackClassRec));
     if (!feedc)
@@ -1540,6 +1727,8 @@ InitIntegerFeedbackClassDeviceStruct(DeviceIntPtr dev,
 {
     IntegerFeedbackPtr feedc;
 
+    BUG_RETURN_VAL(dev == NULL, FALSE);
+
     feedc = malloc(sizeof(IntegerFeedbackClassRec));
     if (!feedc)
         return FALSE;
@@ -1560,11 +1749,35 @@ InitPointerDeviceStruct(DevicePtr device, CARD8 *map, int numButtons,
 {
     DeviceIntPtr dev = (DeviceIntPtr) device;
 
+    BUG_RETURN_VAL(dev == NULL, FALSE);
+    BUG_RETURN_VAL(dev->button != NULL, FALSE);
+    BUG_RETURN_VAL(dev->valuator != NULL, FALSE);
+    BUG_RETURN_VAL(dev->ptrfeed != NULL, FALSE);
+
     return (InitButtonClassDeviceStruct(dev, numButtons, btn_labels, map) &&
             InitValuatorClassDeviceStruct(dev, numAxes, axes_labels,
                                           numMotionEvents, Relative) &&
             InitPtrFeedbackClassDeviceStruct(dev, controlProc));
 }
+
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+Bool
+InitTouchDeviceStruct(DeviceIntPtr device, int numAxes,
+                    Atom *axes_labels, int numMotionEvents, int valuatormode, int numTouches,
+                    unsigned int touchMode, int numButtons, Atom *btn_labels, CARD8 *map)
+{
+    BUG_RETURN_VAL(device == NULL, FALSE);
+    BUG_RETURN_VAL(device->button != NULL, FALSE);
+    BUG_RETURN_VAL(device->valuator != NULL, FALSE);
+    BUG_RETURN_VAL(device->ptrfeed != NULL, FALSE);
+
+    return (InitValuatorClassDeviceStruct(device, numAxes, axes_labels,
+                                          numMotionEvents, valuatormode) &&
+                 InitTouchClassDeviceStruct(device, numTouches, touchMode, numAxes) &&
+                 InitButtonClassDeviceStruct(device, numButtons, btn_labels, map));
+}
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
+
 
 /**
  * Sets up multitouch capabilities on @device.
@@ -1580,14 +1793,13 @@ InitTouchClassDeviceStruct(DeviceIntPtr device, unsigned int max_touches,
     TouchClassPtr touch;
     int i;
 
-    if (device->touch || !device->valuator)
-        return FALSE;
+    BUG_RETURN_VAL(device == NULL, FALSE);
+    BUG_RETURN_VAL(device->touch != NULL, FALSE);
+    BUG_RETURN_VAL(device->valuator == NULL, FALSE);
 
     /* Check the mode is valid, and at least X and Y axes. */
-    if (mode != XIDirectTouch && mode != XIDependentTouch)
-        return FALSE;
-    if (num_axes < 2)
-        return FALSE;
+    BUG_RETURN_VAL(mode != XIDirectTouch && mode != XIDependentTouch, FALSE);
+    BUG_RETURN_VAL(num_axes < 2, FALSE);
 
     if (num_axes > MAX_VALUATORS) {
         LogMessage(X_WARNING,
@@ -2584,6 +2796,7 @@ AttachDevice(ClientPtr client, DeviceIntPtr dev, DeviceIntPtr master)
         dev->spriteInfo->paired = master;
         dev->spriteInfo->spriteOwner = FALSE;
 
+        XkbPushLockedStateToSlaves(GetMaster(dev, MASTER_KEYBOARD), 0, 0);
         RecalculateMasterButtons(master);
     }
 
@@ -2671,6 +2884,7 @@ AllocDevicePair(ClientPtr client, const char *name,
 {
     DeviceIntPtr pointer;
     DeviceIntPtr keyboard;
+    char *dev_name;
 
     *ptr = *keybd = NULL;
 
@@ -2681,12 +2895,12 @@ AllocDevicePair(ClientPtr client, const char *name,
     if (!pointer)
         return BadAlloc;
 
-    if (asprintf(&pointer->name, "%s pointer", name) == -1) {
-        pointer->name = NULL;
+    if (asprintf(&dev_name, "%s pointer", name) == -1) {
         RemoveDevice(pointer, FALSE);
 
         return BadAlloc;
     }
+    pointer->name = dev_name;
 
     pointer->public.processInputProc = ProcessOtherEvent;
     pointer->public.realInputProc = ProcessOtherEvent;
@@ -2707,13 +2921,13 @@ AllocDevicePair(ClientPtr client, const char *name,
         return BadAlloc;
     }
 
-    if (asprintf(&keyboard->name, "%s keyboard", name) == -1) {
-        keyboard->name = NULL;
+    if (asprintf(&dev_name, "%s keyboard", name) == -1) {
         RemoveDevice(keyboard, FALSE);
         RemoveDevice(pointer, FALSE);
 
         return BadAlloc;
     }
+    keyboard->name = dev_name;
 
     keyboard->public.processInputProc = ProcessOtherEvent;
     keyboard->public.realInputProc = ProcessOtherEvent;
@@ -2728,9 +2942,10 @@ AllocDevicePair(ClientPtr client, const char *name,
     keyboard->type = (master) ? MASTER_KEYBOARD : SLAVE;
 
     /* The ClassesRec stores the device classes currently not used. */
-    pointer->unused_classes = calloc(1, sizeof(ClassesRec));
-
-    keyboard->unused_classes = calloc(1, sizeof(ClassesRec));
+    if (IsMaster(pointer)) {
+        pointer->unused_classes = calloc(1, sizeof(ClassesRec));
+        keyboard->unused_classes = calloc(1, sizeof(ClassesRec));
+    }
 
     *ptr = pointer;
 
@@ -2738,6 +2953,86 @@ AllocDevicePair(ClientPtr client, const char *name,
 
     return Success;
 }
+
+#ifdef _F_SUPPORT_XTEST_TOUCH_EVENT_
+int
+AllocHWKeyTouchDevicePair(ClientPtr client, const char *name,
+                DeviceIntPtr *ptr,
+                DeviceIntPtr *keybd,
+                DeviceProc ptr_proc, DeviceProc keybd_proc, Bool master)
+{
+    DeviceIntPtr pointer;
+    DeviceIntPtr keyboard;
+    char *dev_name;
+
+    *ptr = *keybd = NULL;
+
+    XkbInitPrivates();
+
+    pointer = AddInputDevice(client, ptr_proc, TRUE);
+
+    if (!pointer)
+        return BadAlloc;
+
+    if (asprintf(&dev_name, "%s touch", name) == -1) {
+        RemoveDevice(pointer, FALSE);
+
+        return BadAlloc;
+    }
+    pointer->name = dev_name;
+
+    pointer->public.processInputProc = ProcessOtherEvent;
+    pointer->public.realInputProc = ProcessOtherEvent;
+    XkbSetExtension(pointer, ProcessPointerEvent);
+    pointer->deviceGrab.ActivateGrab = ActivatePointerGrab;
+    pointer->deviceGrab.DeactivateGrab = DeactivatePointerGrab;
+    pointer->coreEvents = TRUE;
+    pointer->spriteInfo->spriteOwner = TRUE;
+
+    pointer->lastSlave = NULL;
+    pointer->last.slave = NULL;
+    pointer->type = (master) ? MASTER_POINTER : SLAVE;
+
+    keyboard = AddInputDevice(client, keybd_proc, TRUE);
+    if (!keyboard) {
+        RemoveDevice(pointer, FALSE);
+
+        return BadAlloc;
+    }
+
+    if (asprintf(&dev_name, "%s functionkeys", name) == -1) {
+        RemoveDevice(keyboard, FALSE);
+        RemoveDevice(pointer, FALSE);
+
+        return BadAlloc;
+    }
+    keyboard->name = dev_name;
+
+    keyboard->public.processInputProc = ProcessOtherEvent;
+    keyboard->public.realInputProc = ProcessOtherEvent;
+    XkbSetExtension(keyboard, ProcessKeyboardEvent);
+    keyboard->deviceGrab.ActivateGrab = ActivateKeyboardGrab;
+    keyboard->deviceGrab.DeactivateGrab = DeactivateKeyboardGrab;
+    keyboard->coreEvents = TRUE;
+    keyboard->spriteInfo->spriteOwner = FALSE;
+
+    keyboard->lastSlave = NULL;
+    keyboard->last.slave = NULL;
+    keyboard->type = (master) ? MASTER_KEYBOARD : SLAVE;
+
+    /* The ClassesRec stores the device classes currently not used. */
+    if (IsMaster(pointer)) {
+        pointer->unused_classes = calloc(1, sizeof(ClassesRec));
+        keyboard->unused_classes = calloc(1, sizeof(ClassesRec));
+    }
+
+    *ptr = pointer;
+
+    *keybd = keyboard;
+
+    return Success;
+}
+#endif //_F_SUPPORT_XTEST_TOUCH_EVENT_
 
 /**
  * Return Relative or Absolute for the device.

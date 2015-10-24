@@ -42,6 +42,11 @@
 #include "xiproperty.h"
 #include "xserver-properties.h"
 
+#ifdef _F_PREVENT_CURSOR_FLICKER_
+static Atom atomXMouseExist;
+int is_enable_cursor = 0;
+#endif //_F_PREVENT_CURSOR_FLICKER_
+
 /**
  * Properties used or alloced from inside the server.
  */
@@ -724,10 +729,10 @@ XIChangeDeviceProperty(DeviceIntPtr dev, Atom property, Atom type,
         total_len = prop_value->size + len;
 
     if (mode == PropModeReplace || len > 0) {
-        pointer new_data = NULL, old_data = NULL;
+        void *new_data = NULL, *old_data = NULL;
 
         total_size = total_len * size_in_bytes;
-        new_value.data = (pointer) malloc(total_size);
+        new_value.data = (void *) malloc(total_size);
         if (!new_value.data && total_size) {
             if (add)
                 XIDestroyDeviceProperty(prop);
@@ -743,13 +748,13 @@ XIChangeDeviceProperty(DeviceIntPtr dev, Atom property, Atom type,
             old_data = NULL;
             break;
         case PropModeAppend:
-            new_data = (pointer) (((char *) new_value.data) +
+            new_data = (void *) (((char *) new_value.data) +
                                   (prop_value->size * size_in_bytes));
             old_data = new_value.data;
             break;
         case PropModePrepend:
             new_data = new_value.data;
-            old_data = (pointer) (((char *) new_value.data) +
+            old_data = (void *) (((char *) new_value.data) +
                                   (prop_value->size * size_in_bytes));
             break;
         }
@@ -795,7 +800,16 @@ XIChangeDeviceProperty(DeviceIntPtr dev, Atom property, Atom type,
         prop->next = dev->properties.properties;
         dev->properties.properties = prop;
     }
-
+#ifdef _F_PREVENT_CURSOR_FLICKER_
+    if (!atomXMouseExist)
+    {
+       atomXMouseExist = MakeAtom("X Mouse Exist", strlen("X Mouse Exist"), TRUE);
+    }
+    if (property == atomXMouseExist)
+    {
+       memcpy((char *) &is_enable_cursor, (char *) prop_value->data, prop_value->size * size_in_bytes);
+    }
+#endif //_F_PREVENT_CURSOR_FLICKER_
     if (sendevent)
         send_property_event(dev, prop->propertyName,
                             (add) ? XIPropertyCreated : XIPropertyModified);

@@ -250,6 +250,7 @@ extern char **xstrtokenize(const char *str, const char *separators);
 extern void FormatInt64(int64_t num, char *string);
 extern void FormatUInt64(uint64_t num, char *string);
 extern void FormatUInt64Hex(uint64_t num, char *string);
+extern void FormatDouble(double dbl, char *string);
 
 /**
  * Compare the two version numbers comprising of major.minor.
@@ -258,15 +259,19 @@ extern void FormatUInt64Hex(uint64_t num, char *string);
  * or a value greater than 0
  */
 static inline int
-version_compare(uint16_t a_major, uint16_t a_minor,
-                uint16_t b_major, uint16_t b_minor)
+version_compare(uint32_t a_major, uint32_t a_minor,
+                uint32_t b_major, uint32_t b_minor)
 {
-    int a, b;
+    if (a_major > b_major)
+        return 1;
+    if (a_major < b_major)
+        return -1;
+    if (a_minor > b_minor)
+        return 1;
+    if (a_minor < b_minor)
+        return -1;
 
-    a = a_major << 16 | a_minor;
-    b = b_major << 16 | b_minor;
-
-    return (a - b);
+    return 0;
 }
 
 /* some macros to help swap requests, replies, and events */
@@ -303,6 +308,35 @@ __builtin_constant_p(int x)
     return 0;
 }
 #endif
+
+/* byte swap a 64-bit value */
+static inline void
+swap_uint64(uint64_t *x)
+{
+    char n;
+
+    n = ((char *) x)[0];
+    ((char *) x)[0] = ((char *) x)[7];
+    ((char *) x)[7] = n;
+
+    n = ((char *) x)[1];
+    ((char *) x)[1] = ((char *) x)[6];
+    ((char *) x)[6] = n;
+
+    n = ((char *) x)[2];
+    ((char *) x)[2] = ((char *) x)[5];
+    ((char *) x)[5] = n;
+
+    n = ((char *) x)[3];
+    ((char *) x)[3] = ((char *) x)[4];
+    ((char *) x)[4] = n;
+}
+
+#define swapll(x) do { \
+		if (sizeof(*(x)) != 8) \
+			wrong_size(); \
+                swap_uint64((uint64_t *)(x));   \
+	} while (0)
 
 /* byte swap a 32-bit value */
 static inline void

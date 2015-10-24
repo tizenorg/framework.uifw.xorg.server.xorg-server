@@ -118,10 +118,17 @@ KdDoSwitchCmd(const char *reason)
 {
     if (kdSwitchCmd) {
         char *command;
+        int ret;
 
         if (asprintf(&command, "%s %s", kdSwitchCmd, reason) == -1)
             return;
-        system(command);
+
+        /* Ignore the return value from system; I'm not sure
+         * there's anything more useful to be done when
+         * it fails
+         */
+        ret = system(command);
+        (void) ret;
         free(command);
     }
 }
@@ -246,8 +253,8 @@ ddxGiveUp(enum ExitCode error)
 Bool kdDumbDriver;
 Bool kdSoftCursor;
 
-char *
-KdParseFindNext(char *cur, const char *delim, char *save, char *last)
+const char *
+KdParseFindNext(const char *cur, const char *delim, char *save, char *last)
 {
     while (*cur && !strchr(delim, *cur)) {
         *save++ = *cur++;
@@ -282,7 +289,7 @@ KdSubRotation(Rotation a, Rotation b)
 }
 
 void
-KdParseScreen(KdScreenInfo * screen, char *arg)
+KdParseScreen(KdScreenInfo * screen, const char *arg)
 {
     char delim;
     char save[1024];
@@ -328,7 +335,8 @@ KdParseScreen(KdScreenInfo * screen, char *arg)
             screen->height = pixels;
             screen->height_mm = mm;
         }
-        if (delim != 'x' && delim != '@' && delim != 'X' && delim != 'Y')
+        if (delim != 'x' && delim != '@' && delim != 'X' && delim != 'Y' &&
+            (delim != '\0' || i == 0))
             return;
     }
 
@@ -664,7 +672,7 @@ KdCloseScreen(ScreenPtr pScreen)
 
     pScreenPriv->screen->pScreen = 0;
 
-    free((pointer) pScreenPriv);
+    free((void *) pScreenPriv);
     return ret;
 }
 
@@ -943,7 +951,8 @@ KdInitScreen(ScreenInfo * pScreenInfo,
 {
     KdCardInfo *card = screen->card;
 
-    (*card->cfuncs->scrinit) (screen);
+    if (!(*card->cfuncs->scrinit) (screen))
+        FatalError("Screen initialization failed!\n");
 
     if (!card->cfuncs->initAccel)
         screen->dumb = TRUE;

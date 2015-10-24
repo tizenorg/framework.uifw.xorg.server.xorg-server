@@ -51,9 +51,22 @@
 #include "panoramiXsrv.h"
 #endif
 
+#ifdef _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+static int prefered_w = 0 ;
+static int prefered_h = 0 ;
+
+#define IS_NOT_SET 0
+#define IS_SET 1
+#endif  // _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+
+#ifdef ENABLE_DLOG
+#define LOG_TAG "XORG_PIXMAP"
+#include <dlog.h>
+#endif
+
 #ifdef COMPOSITE_DEBUG
 static int
-compCheckWindow(WindowPtr pWin, pointer data)
+compCheckWindow(WindowPtr pWin, void *data)
 {
     ScreenPtr pScreen = pWin->drawable.pScreen;
     PixmapPtr pWinPixmap = (*pScreen->GetWindowPixmap) (pWin);
@@ -92,7 +105,7 @@ typedef struct _compPixmapVisit {
 } CompPixmapVisitRec, *CompPixmapVisitPtr;
 
 static Bool
-compRepaintBorder(ClientPtr pClient, pointer closure)
+compRepaintBorder(ClientPtr pClient, void *closure)
 {
     WindowPtr pWindow;
     int rc =
@@ -111,7 +124,7 @@ compRepaintBorder(ClientPtr pClient, pointer closure)
 }
 
 static int
-compSetPixmapVisitWindow(WindowPtr pWindow, pointer data)
+compSetPixmapVisitWindow(WindowPtr pWindow, void *data)
 {
     CompPixmapVisitPtr pVisit = (CompPixmapVisitPtr) data;
     ScreenPtr pScreen = pWindow->drawable.pScreen;
@@ -128,7 +141,7 @@ compSetPixmapVisitWindow(WindowPtr pWindow, pointer data)
     SetBorderSize(pWindow);
     if (HasBorder(pWindow))
         QueueWorkProc(compRepaintBorder, serverClient,
-                      (pointer) (intptr_t) pWindow->drawable.id);
+                      (void *) (intptr_t) pWindow->drawable.id);
     return WT_WALKCHILDREN;
 }
 
@@ -139,7 +152,7 @@ compSetPixmap(WindowPtr pWindow, PixmapPtr pPixmap)
 
     visitRec.pWindow = pWindow;
     visitRec.pPixmap = pPixmap;
-    TraverseTree(pWindow, compSetPixmapVisitWindow, (pointer) &visitRec);
+    TraverseTree(pWindow, compSetPixmapVisitWindow, (void *) &visitRec);
     compCheckTree(pWindow->drawable.pScreen);
 }
 
@@ -149,6 +162,9 @@ compCheckRedirect(WindowPtr pWin)
     CompWindowPtr cw = GetCompWindow(pWin);
     CompScreenPtr cs = GetCompScreen(pWin->drawable.pScreen);
     Bool should;
+    ScreenPtr pScreen = NULL;
+    PixmapPtr pPixmap = NULL;
+    Bool ret = FALSE;
 
     should = pWin->realized && (pWin->drawable.class != InputOnly) &&
         (cw != NULL) && (pWin->parent != NULL);
@@ -161,14 +177,48 @@ compCheckRedirect(WindowPtr pWin)
     }
 
     if (should != (pWin->redirectDraw != RedirectDrawNone)) {
-        if (should)
-            return compAllocPixmap(pWin);
+        if (should) {
+            ret = compAllocPixmap(pWin);
+            pScreen = pWin->drawable.pScreen;
+            pPixmap = (*pScreen->GetWindowPixmap) (pWin);
+
+#ifdef ENABLE_DLOG
+            SLOG(LOG_INFO, "XORG_PIXMAP", "pix_id:%p, pixmap:%p (%dx%d) refcnt:%d win_id:%p win:%p (%dx%d) view:%d\n",
+                pPixmap->drawable.id,
+                pPixmap,
+                pPixmap->drawable.width,
+                pPixmap->drawable.height,
+                pPixmap->refcnt,
+                pWin->drawable.id,
+                pWin,
+                pWin->drawable.width,
+                pWin->drawable.height,
+                pWin->viewable);
+#endif
+
+            return ret;
+        }
         else {
-            ScreenPtr pScreen = pWin->drawable.pScreen;
-            PixmapPtr pPixmap = (*pScreen->GetWindowPixmap) (pWin);
+            pScreen = pWin->drawable.pScreen;
+            pPixmap = (*pScreen->GetWindowPixmap) (pWin);
 
             compSetParentPixmap(pWin);
             compRestoreWindow(pWin, pPixmap);
+
+#ifdef ENABLE_DLOG
+            SLOG(LOG_INFO, "XORG_PIXMAP", "pix_id:%p, pixmap:%p (%dx%d) refcnt:%d-1 win_id:%p win:%p (%dx%d) view:%d\n",
+                pPixmap->drawable.id,
+                pPixmap,
+                pPixmap->drawable.width,
+                pPixmap->drawable.height,
+                pPixmap->refcnt,
+                pWin->drawable.id,
+                pWin,
+                pWin->drawable.width,
+                pWin->drawable.height,
+                pWin->viewable);
+
+#endif
             (*pScreen->DestroyPixmap) (pPixmap);
         }
     }
@@ -178,6 +228,26 @@ compCheckRedirect(WindowPtr pWin)
         else
             pWin->redirectDraw = RedirectDrawManual;
     }
+
+#ifdef ENABLE_DLOG
+    if (!pPixmap) {
+        pScreen = pWin->drawable.pScreen;
+        pPixmap = (*pScreen->GetWindowPixmap) (pWin);
+    }
+
+    SLOG(LOG_INFO, "XORG_PIXMAP", "pix_id:%p, pixmap:%p (%dx%d) refcnt:%d win_id:%p win:%p (%dx%d) view:%d\n",
+        pPixmap->drawable.id,
+        pPixmap,
+        pPixmap->drawable.width,
+        pPixmap->drawable.height,
+        pPixmap->refcnt,
+        pWin->drawable.id,
+        pWin,
+        pWin->drawable.width,
+        pWin->drawable.height,
+        pWin->viewable);
+#endif
+
     return TRUE;
 }
 
@@ -336,12 +406,38 @@ compIsAlternateVisual(ScreenPtr pScreen, XID visual)
 }
 
 static Bool
+compIsImplicitRedirectException(ScreenPtr pScreen,
+                                XID parentVisual, XID winVisual)
+{
+    CompScreenPtr cs = GetCompScreen(pScreen);
+    int i;
+
+    for (i = 0; i < cs->numImplicitRedirectExceptions; i++)
+        if (cs->implicitRedirectExceptions[i].parentVisual == parentVisual &&
+            cs->implicitRedirectExceptions[i].winVisual == winVisual)
+            return TRUE;
+
+    return FALSE;
+}
+
+static Bool
 compImplicitRedirect(WindowPtr pWin, WindowPtr pParent)
 {
+#ifdef _F_NO_IMPLICIT_REDIRECT_
+    /*
+    Xserver redirect windows inside when the visuals(ex.depth) between parent of a window and the window is different.
+    Do not check the visuals between them in the composite extension when xserver redirect a window.
+    This make the 32 depth window get the root pixmap when compositor unredirect the 32 depth toplevel window.
+    */
+    return FALSE;
+#endif
     if (pParent) {
         ScreenPtr pScreen = pWin->drawable.pScreen;
         XID winVisual = wVisual(pWin);
         XID parentVisual = wVisual(pParent);
+
+        if (compIsImplicitRedirectException(pScreen, parentVisual, winVisual))
+            return FALSE;
 
         if (winVisual != parentVisual &&
             (compIsAlternateVisual(pScreen, winVisual) ||
@@ -360,6 +456,20 @@ compFreeOldPixmap(WindowPtr pWin)
         CompWindowPtr cw = GetCompWindow(pWin);
 
         if (cw->pOldPixmap) {
+#ifdef ENABLE_DLOG
+            SLOG(LOG_INFO, "XORG_PIXMAP", "pix_id:%p, pixmap:%p (%dx%d) refcnt:%d-1 win_id:%p win:%p (%dx%d) view:%d\n",
+                cw->pOldPixmap->drawable.id,
+                cw->pOldPixmap,
+                cw->pOldPixmap->drawable.width,
+                cw->pOldPixmap->drawable.height,
+                cw->pOldPixmap->refcnt,
+                pWin->drawable.id,
+                pWin,
+                pWin->drawable.width,
+                pWin->drawable.height,
+                pWin->viewable);
+
+#endif
             (*pScreen->DestroyPixmap) (cw->pOldPixmap);
             cw->pOldPixmap = NullPixmap;
         }
@@ -475,7 +585,6 @@ compCopyWindow(WindowPtr pWin, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
              * need to be copied to pNewPixmap.
              */
             RegionRec rgnDst;
-            PixmapPtr pPixmap = (*pScreen->GetWindowPixmap) (pWin);
             GCPtr pGC;
 
             dx = ptOldOrg.x - pWin->drawable.x;
@@ -508,6 +617,7 @@ compCopyWindow(WindowPtr pWin, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
                 }
                 FreeScratchGC(pGC);
             }
+            RegionUninit(&rgnDst);
             return;
         }
         dx = pPixmap->screen_x - cw->oldx;
@@ -585,6 +695,19 @@ compDestroyWindow(WindowPtr pWin)
         PixmapPtr pPixmap = (*pScreen->GetWindowPixmap) (pWin);
 
         compSetParentPixmap(pWin);
+#ifdef ENABLE_DLOG
+        SLOG(LOG_INFO, "XORG_PIXMAP", "pix_id:%p, pixmap:%p (%dx%d) refcnt:%d-1 win_id:%p win:%p (%dx%d) view:%d\n",
+            pPixmap->drawable.id,
+            pPixmap,
+            pPixmap->drawable.width,
+            pPixmap->drawable.height,
+            pPixmap->refcnt,
+            pWin->drawable.id,
+            pWin,
+            pWin->drawable.width,
+            pWin->drawable.height,
+            pWin->viewable);
+#endif
         (*pScreen->DestroyPixmap) (pPixmap);
     }
     ret = (*pScreen->DestroyWindow) (pWin);
@@ -641,20 +764,26 @@ compWindowUpdateAutomatic(WindowPtr pWin)
     PixmapPtr pSrcPixmap = (*pScreen->GetWindowPixmap) (pWin);
     PictFormatPtr pSrcFormat = PictureWindowFormat(pWin);
     PictFormatPtr pDstFormat = PictureWindowFormat(pWin->parent);
+    PicturePtr pSrcPicture = NULL;
+    PicturePtr pDstPicture = NULL;
     int error;
     RegionPtr pRegion = DamageRegion(cw->damage);
-    PicturePtr pSrcPicture = CreatePicture(0, &pSrcPixmap->drawable,
-                                           pSrcFormat,
-                                           0, 0,
-                                           serverClient,
-                                           &error);
     XID subwindowMode = IncludeInferiors;
-    PicturePtr pDstPicture = CreatePicture(0, &pParent->drawable,
-                                           pDstFormat,
-                                           CPSubwindowMode,
-                                           &subwindowMode,
-                                           serverClient,
-                                           &error);
+
+    if (pSrcFormat)
+        pSrcPicture = CreatePicture(0, &pSrcPixmap->drawable,
+                                   pSrcFormat,
+                                   0, 0,
+                                   serverClient,
+                                   &error);
+
+    if (pDstFormat)
+        pDstPicture = CreatePicture(0, &pParent->drawable,
+                                   pDstFormat,
+                                   CPSubwindowMode,
+                                   &subwindowMode,
+                                   serverClient,
+                                   &error);
 
     /*
      * First move the region from window to screen coordinates
@@ -674,19 +803,23 @@ compWindowUpdateAutomatic(WindowPtr pWin)
     /*
      * Clip the picture
      */
-    SetPictureClipRegion(pDstPicture, 0, 0, pRegion);
+    if (pDstPicture)
+        SetPictureClipRegion(pDstPicture, 0, 0, pRegion);
 
     /*
      * And paint
      */
-    CompositePicture(PictOpSrc, pSrcPicture, 0, pDstPicture,
-                     0, 0,      /* src_x, src_y */
-                     0, 0,      /* msk_x, msk_y */
-                     pSrcPixmap->screen_x - pParent->drawable.x,
-                     pSrcPixmap->screen_y - pParent->drawable.y,
-                     pSrcPixmap->drawable.width, pSrcPixmap->drawable.height);
-    FreePicture(pSrcPicture, 0);
-    FreePicture(pDstPicture, 0);
+    if (pSrcPicture && pDstPicture)
+        CompositePicture(PictOpSrc, pSrcPicture, 0, pDstPicture,
+                         0, 0,      /* src_x, src_y */
+                         0, 0,      /* msk_x, msk_y */
+                         pSrcPixmap->screen_x - pParent->drawable.x,
+                         pSrcPixmap->screen_y - pParent->drawable.y,
+                         pSrcPixmap->drawable.width, pSrcPixmap->drawable.height);
+    if (pSrcPicture)
+        FreePicture(pSrcPicture, 0);
+    if (pDstPicture)
+        FreePicture(pDstPicture, 0);
     /*
      * Empty the damage region.  This has the nice effect of
      * rendering the translations above harmless
@@ -795,6 +928,7 @@ compConfigNotify(WindowPtr pWin, int x, int y, int w, int h,
 static void
 print_matrix(char* name, pixman_transform_t* t)
 {
+#ifdef _PRINT_INPUT_REDIRECT_MATRIX_
         int i;
         ErrorF("[%s] %s = \n", __FUNCTION__, name);
         for(i=0; i<3; i++)
@@ -804,7 +938,57 @@ print_matrix(char* name, pixman_transform_t* t)
                         , pixman_fixed_to_double(t->matrix[i][1])
                         , pixman_fixed_to_double(t->matrix[i][2]));
         }
+#endif //_PRINT_INPUT_REDIRECT_MATRIX_
 }
+
+typedef struct {
+    CompositeSetTransformPtr SetTransform;
+} CompositeScreenRec, *CompositeScreenPtr;
+
+static DevPrivateKeyRec compositePrivateKeyRec;
+#define compositePrivatePrivateKey (&compositePrivateKeyRec)
+
+static CompositeScreenPtr
+CompositeGetScreen(ScreenPtr pScreen)
+{
+    if (!dixPrivateKeyRegistered(compositePrivatePrivateKey))
+        return NULL;
+    return dixLookupPrivate(&pScreen->devPrivates, compositePrivatePrivateKey);
+}
+
+Bool
+CompositeScreenInit (ScreenPtr pScreen, CompositeInfoPtr info)
+{
+    CompositeScreenPtr cs = NULL;
+
+    if (!pScreen || !info)
+        return FALSE;
+
+    if (!dixRegisterPrivateKey(&compositePrivateKeyRec, PRIVATE_SCREEN, 0))
+        return FALSE;
+
+    cs = calloc(1, sizeof *cs);
+    if (!cs)
+        return FALSE;
+
+    cs->SetTransform = info->SetTransform;
+
+    dixSetPrivate(&pScreen->devPrivates, compositePrivatePrivateKey, cs);
+
+    ErrorF ("[%s] setup complete\n", __FUNCTION__);
+
+    return TRUE;
+}
+
+void
+CompositeCloseScreen (ScreenPtr pScreen)
+{
+    CompositeScreenPtr cs = CompositeGetScreen(pScreen);
+
+    if (cs)
+        free (cs);
+}
+
 Bool
 CompositeGetTransformPoint (WindowPtr pChild,
                          int      x,
@@ -850,6 +1034,8 @@ CompositeGetInvTransformPoint (WindowPtr pChild,
                          int      *tx,
                          int      *ty)
 {
+    if(!pChild)
+        return FALSE;
     CompWindowPtr cw = GetCompWindow (pChild);
 
     if (cw && cw->pInvTransform)
@@ -909,6 +1095,18 @@ CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
                                           int       *screenX,
                                           int       *screenY)
 {
+#ifdef _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+    static Bool preferred_resolution_set = IS_NOT_SET;
+    if(!preferred_resolution_set)
+    {
+        ScreenPtr pScreen = pWin->drawable.pScreen;
+        WindowPtr rootWin = pScreen->root;
+        prefered_w = rootWin->drawable.width ;
+        prefered_h = rootWin->drawable.height ;
+        preferred_resolution_set = IS_SET;
+    }
+#endif
+
     if (!pWin->parent)
     {
        *screenX = x;
@@ -922,15 +1120,56 @@ CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
     }
 }
 
+#ifdef _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+void
+CompositeXYScreenFromWindowLeftBufferCoordinate (WindowPtr pWin,
+                                          int       x,
+                                          int       y,
+                                          int       *screenX,
+                                          int       *screenY)
+{
+
+    CompositeXYScreenFromWindowRootCoordinate (pWin,x, y, screenX, screenY);
+
+    int fbW, fbH ;
+    ScreenPtr pScreen = pWin->drawable.pScreen;
+    WindowPtr rootWin = pScreen->root;
+    fbW = rootWin->drawable.width ;
+    fbH = rootWin->drawable.height ;
+
+    *screenX = (*screenX * prefered_w)/fbW ;
+    *screenY = (*screenY * prefered_h)/fbH ;
+
+
+}
+#endif
+
 int
 CompositeSetCoordinateTransform (ClientPtr pClient,
                                      WindowPtr pWin,
                                      PictTransformPtr pTransform)
 {
-    CompSubwindowsPtr   csw = GetCompSubwindows (pWin->parent);
-    CompWindowPtr      cw = GetCompWindow (pWin);
+    CompSubwindowsPtr   csw = NULL;
+    CompWindowPtr      cw = NULL;
     CompClientWindowPtr        ccw;
     PictTransform inv;
+    CompositeScreenPtr cs = CompositeGetScreen(pWin->drawable.pScreen);
+
+    if (!dixPrivateKeyRegistered(CompSubwindowsPrivateKey))
+    {
+        ErrorF("[%s:%d] Failed to CompSubwindowsPrivateKey\n", __FUNCTION__, __LINE__);
+        return BadAccess;
+    }
+
+    csw = GetCompSubwindows (pWin->parent);
+
+    if (!dixPrivateKeyRegistered(CompWindowPrivateKey))
+    {
+        ErrorF("[%s:%d] Failed to CompWindowPrivateKey\n", __FUNCTION__, __LINE__);
+        return BadAccess;
+    }
+
+    cw = GetCompWindow (pWin);
 
     /*
      * sub-window must be Manual update
@@ -954,16 +1193,20 @@ CompositeSetCoordinateTransform (ClientPtr pClient,
 
     if (pTransform && pixman_transform_is_identity(pTransform))
     {
+#ifdef _PRINT_INPUT_REDIRECT_MATRIX_
         ErrorF("[%s] pTransform=0 : pTransform && pixman_transform_is_identity(pTransform)\n", __FUNCTION__);
+#endif //_PRINT_INPUT_REDIRECT_MATRIX_
         pTransform = 0;
     }
 
-    if(pTransform && pTransform->matrix)
+    if (pTransform)
         print_matrix("pTransform", pTransform);
+#ifdef _PRINT_INPUT_REDIRECT_MATRIX_
     else
         ErrorF("[%s] pTransform or pTransform->matrix is NULL !\n", __FUNCTION__);
+#endif //_PRINT_INPUT_REDIRECT_MATRIX_
 
-    if(pTransform && !pixman_transform_invert(&inv, pTransform))
+    if (pTransform && !pixman_transform_invert(&inv, pTransform))
     {
         ErrorF("[%s] BadRequest : !pixman_transform_invert(&inv, pTransform)\n", __FUNCTION__);
         return BadRequest;
@@ -1005,12 +1248,25 @@ CompositeSetCoordinateTransform (ClientPtr pClient,
            cw->pTransform = 0;
        }
 
-       if(cw->pInvTransform)
+       if (cw->pInvTransform)
        {
            xfree(cw->pInvTransform);
            cw->pInvTransform = 0;
        }
     }
+
+    if (cs && cs->SetTransform)
+    {
+        int ret = cs->SetTransform(pWin, pTransform);
+
+        if (ret != Success)
+        {
+            ErrorF("[%s] SetTransform return %d \n", __FUNCTION__, ret);
+            return BadImplementation;
+        }
+    }
+
+    CheckCursorConfinement(pWin);
 
     return 0;
 }

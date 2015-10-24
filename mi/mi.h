@@ -26,13 +26,13 @@ Copyright 1987 by Digital Equipment Corporation, Maynard, Massachusetts.
 
                         All Rights Reserved
 
-Permission to use, copy, modify, and distribute this software and its
-documentation for any purpose and without fee is hereby granted,
+Permission to use, copy, modify, and distribute this software and its 
+documentation for any purpose and without fee is hereby granted, 
 provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in
+both that copyright notice and this permission notice appear in 
 supporting documentation, and that the name of Digital not be
 used in advertising or publicity pertaining to distribution of the
-software without specific, written prior permission.
+software without specific, written prior permission.  
 
 DIGITAL DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
 ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
@@ -216,6 +216,7 @@ void _X_EXPORT mieqSetHandler(int event, mieqHandler handler);
 
 /* miexpose.c */
 
+//#ifdef _F_SNIFF_MIEQ_
 typedef struct _Event {
     InternalEvent *events;
     ScreenPtr pScreen;
@@ -235,6 +236,7 @@ typedef struct _EventQueue {
 extern _X_EXPORT EventQueuePtr mieqGetEventQueuePtr();
 
 extern _X_EXPORT size_t mieqNumEnqueued(EventQueuePtr eventQueue);
+//#endif //_F_SNIFF_MIEQ_
 
 extern _X_EXPORT RegionPtr miHandleExposures(DrawablePtr /*pSrcDrawable */ ,
                                              DrawablePtr /*pDstDrawable */ ,
@@ -291,7 +293,7 @@ extern _X_EXPORT void miPolyGlyphBlt(DrawablePtr /*pDrawable */ ,
                                      int /*y */ ,
                                      unsigned int /*nglyph */ ,
                                      CharInfoPtr * /*ppci */ ,
-                                     pointer    /*pglyphBase */
+                                     void */*pglyphBase */
     );
 
 extern _X_EXPORT void miImageGlyphBlt(DrawablePtr /*pDrawable */ ,
@@ -300,7 +302,7 @@ extern _X_EXPORT void miImageGlyphBlt(DrawablePtr /*pDrawable */ ,
                                       int /*y */ ,
                                       unsigned int /*nglyph */ ,
                                       CharInfoPtr * /*ppci */ ,
-                                      pointer   /*pglyphBase */
+                                      void */*pglyphBase */
     );
 
 /* mipoly.c */
@@ -407,7 +409,7 @@ extern _X_EXPORT Bool miModifyPixmapHeader(PixmapPtr /*pPixmap */ ,
                                            int /*depth */ ,
                                            int /*bitsPerPixel */ ,
                                            int /*devKind */ ,
-                                           pointer      /*pPixData */
+                                           void */*pPixData */
     );
 
 extern _X_EXPORT Bool miCreateScreenResources(ScreenPtr /*pScreen */
@@ -415,11 +417,11 @@ extern _X_EXPORT Bool miCreateScreenResources(ScreenPtr /*pScreen */
 
 extern _X_EXPORT Bool miScreenDevPrivateInit(ScreenPtr /*pScreen */ ,
                                              int /*width */ ,
-                                             pointer    /*pbits */
+                                             void */*pbits */
     );
 
 extern _X_EXPORT Bool miScreenInit(ScreenPtr /*pScreen */ ,
-                                   pointer /*pbits */ ,
+                                   void */*pbits */ ,
                                    int /*xsize */ ,
                                    int /*ysize */ ,
                                    int /*dpix */ ,
@@ -526,6 +528,10 @@ extern _X_EXPORT void miMarkUnrealizedWindow(WindowPtr /*pChild */ ,
 
 extern _X_EXPORT void miSegregateChildren(WindowPtr pWin, RegionPtr pReg,
                                           int depth);
+
+extern _X_EXPORT WindowPtr miSpriteTrace(SpritePtr pSprite, int x, int y);
+
+extern _X_EXPORT WindowPtr miXYToWindow(ScreenPtr pScreen, SpritePtr pSprite, int x, int y);
 
 /* mizerarc.c */
 

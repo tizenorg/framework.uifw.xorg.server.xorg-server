@@ -265,16 +265,14 @@ listPossibleVideoDrivers(char *matches[], int nmatches)
 #endif
 #ifdef XSERVER_LIBPCIACCESS
     if (i < (nmatches - 1))
-        i = xf86PciMatchDriver(matches, nmatches);
+        i += xf86PciMatchDriver(&matches[i], nmatches - i);
 #endif
-    /* Fallback to platform default hardware */
+
+#ifdef _F_EXYNOS_DRV_LOAD_
     if (i < (nmatches - 1)) {
-#if defined(__i386__) || defined(__amd64__) || defined(__hurd__)
-        matches[i++] = xnfstrdup("vesa");
-#elif defined(__sparc__) && !defined(sun)
-        matches[i++] = xnfstrdup("sunffb");
-#endif
+        matches[i++] = xnfstrdup("exynos");
     }
+#endif
 
 #if defined(__linux__)
     matches[i++] = xnfstrdup("modesetting");
@@ -290,6 +288,15 @@ listPossibleVideoDrivers(char *matches[], int nmatches)
 #endif
     }
 #endif                          /* !sun */
+
+    /* Fallback to platform default hardware */
+    if (i < (nmatches - 1)) {
+#if defined(__i386__) || defined(__amd64__) || defined(__hurd__)
+        matches[i++] = xnfstrdup("vesa");
+#elif defined(__sparc__) && !defined(sun)
+        matches[i++] = xnfstrdup("sunffb");
+#endif
+    }
 }
 
 /* copy a screen section and enter the desired driver
@@ -299,6 +306,7 @@ copyScreen(confScreenPtr oscreen, GDevPtr odev, int i, char *driver)
 {
     confScreenPtr nscreen;
     GDevPtr cptr = NULL;
+    char *identifier;
 
     nscreen = malloc(sizeof(confScreenRec));
     if (!nscreen)
@@ -312,13 +320,14 @@ copyScreen(confScreenPtr oscreen, GDevPtr odev, int i, char *driver)
     }
     memcpy(cptr, odev, sizeof(GDevRec));
 
-    if (asprintf(&cptr->identifier, "Autoconfigured Video Device %s", driver)
+    if (asprintf(&identifier, "Autoconfigured Video Device %s", driver)
         == -1) {
         free(cptr);
         free(nscreen);
         return FALSE;
     }
     cptr->driver = driver;
+    cptr->identifier = identifier;
 
     xf86ConfigLayout.screens[i].screen = nscreen;
 

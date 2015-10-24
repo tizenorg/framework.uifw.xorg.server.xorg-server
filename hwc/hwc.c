@@ -137,6 +137,10 @@ hwc_destroy_window (WindowPtr pWin)
 
     hwc_free_events(pWin);
 
+#if defined (_F_PRESENT_HWC_FLIP_) && defined (_F_PRESENT_SCANOUT_NOTIFY_)
+    hwc_storage_remove_drawables (drawable);
+#endif
+
     unwrap(screen_priv, screen, DestroyWindow);
     ret = (*screen->DestroyWindow) (pWin);
     wrap(screen_priv, screen, DestroyWindow, hwc_destroy_window);

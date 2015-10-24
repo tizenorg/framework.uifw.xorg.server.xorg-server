@@ -39,7 +39,7 @@ RRCrtcChanged(RRCrtcPtr crtc, Bool layoutChanged)
     if (pScreen) {
         rrScrPriv(pScreen);
 
-        pScrPriv->changed = TRUE;
+        RRSetChanged(pScreen);
         /*
          * Send ConfigureNotify on any layout change
          */
@@ -95,12 +95,14 @@ RRCrtcCreate(ScreenPtr pScreen, void *devPrivate)
     pixman_f_transform_init_identity(&crtc->f_transform);
     pixman_f_transform_init_identity(&crtc->f_inverse);
 
-    if (!AddResource(crtc->id, RRCrtcType, (pointer) crtc))
+    if (!AddResource(crtc->id, RRCrtcType, (void *) crtc))
         return NULL;
 
     /* attach the screen and crtc together */
     crtc->pScreen = pScreen;
     pScrPriv->crtcs[pScrPriv->numCrtcs++] = crtc;
+
+    RRResourcesChanged(pScreen);
 
     return crtc;
 }
@@ -363,15 +365,19 @@ void
 RRCrtcDetachScanoutPixmap(RRCrtcPtr crtc)
 {
     ScreenPtr master = crtc->pScreen->current_master;
-    int ret;
     PixmapPtr mscreenpix;
     rrScrPriv(crtc->pScreen);
 
     mscreenpix = master->GetScreenPixmap(master);
 
-    ret = pScrPriv->rrCrtcSetScanoutPixmap(crtc, NULL);
+    pScrPriv->rrCrtcSetScanoutPixmap(crtc, NULL);
     if (crtc->scanout_pixmap) {
         master->StopPixmapTracking(mscreenpix, crtc->scanout_pixmap);
+        /*
+         * Unref the pixmap twice: once for the original reference, and once
+         * for the reference implicitly added by PixmapShareToSlave.
+         */
+        master->DestroyPixmap(crtc->scanout_pixmap->master_pixmap);
         master->DestroyPixmap(crtc->scanout_pixmap->master_pixmap);
         crtc->pScreen->DestroyPixmap(crtc->scanout_pixmap);
     }
@@ -437,7 +443,7 @@ rrCheckPixmapBounding(ScreenPtr pScreen,
                       RRCrtcPtr rr_crtc, int x, int y, int w, int h)
 {
     RegionRec root_pixmap_region, total_region, new_crtc_region;
-    int i, c;
+    int c;
     BoxRec newbox;
     BoxPtr newsize;
     ScreenPtr slave;
@@ -469,24 +475,25 @@ rrCheckPixmapBounding(ScreenPtr pScreen,
     }
 
     xorg_list_for_each_entry(slave, &pScreen->output_slave_list, output_head) {
-        rrScrPriv(slave);
-        for (c = 0; c < pScrPriv->numCrtcs; c++)
-            if (pScrPriv->crtcs[c] == rr_crtc) {
+        rrScrPrivPtr    slave_priv = rrGetScrPriv(slave);
+        for (c = 0; c < slave_priv->numCrtcs; c++) {
+            if (slave_priv->crtcs[c] == rr_crtc) {
                 newbox.x1 = x;
                 newbox.x2 = x + w;
                 newbox.y1 = y;
                 newbox.y2 = y + h;
             }
             else {
-                if (!pScrPriv->crtcs[c]->mode)
+                if (!slave_priv->crtcs[c]->mode)
                     continue;
-                newbox.x1 = pScrPriv->crtcs[c]->x;
-                newbox.x2 = pScrPriv->crtcs[c]->x + pScrPriv->crtcs[c]->mode->mode.width;
-                newbox.y1 = pScrPriv->crtcs[c]->y;
-                newbox.y2 = pScrPriv->crtcs[c]->y + pScrPriv->crtcs[c]->mode->mode.height;
+                newbox.x1 = slave_priv->crtcs[c]->x;
+                newbox.x2 = slave_priv->crtcs[c]->x + slave_priv->crtcs[c]->mode->mode.width;
+                newbox.y1 = slave_priv->crtcs[c]->y;
+                newbox.y2 = slave_priv->crtcs[c]->y + slave_priv->crtcs[c]->mode->mode.height;
             }
-        RegionInit(&new_crtc_region, &newbox, 1);
-        RegionUnion(&total_region, &total_region, &new_crtc_region);
+            RegionInit(&new_crtc_region, &newbox, 1);
+            RegionUnion(&total_region, &total_region, &new_crtc_region);
+        }
     }
 
     newsize = RegionExtents(&total_region);
@@ -497,10 +504,7 @@ rrCheckPixmapBounding(ScreenPtr pScreen,
         new_height == screen_pixmap->drawable.height) {
         ErrorF("adjust shatters %d %d\n", newsize->x1, newsize->x2);
     } else {
-        int ret;
-        rrScrPriv(pScreen);
-        ret = pScrPriv->rrScreenSetSize(pScreen,
-                                           new_width, new_height, 0, 0);
+        pScrPriv->rrScreenSetSize(pScreen, new_width, new_height, 0, 0);
     }
 
     /* set shatters TODO */
@@ -511,16 +515,33 @@ rrCheckPixmapBounding(ScreenPtr pScreen,
  * Request that the Crtc be reconfigured
  */
 Bool
+#ifdef _F_XF86_DISABLE_UNUSED_FUNC_RESCHANGE_
+RRCrtcSet(RRCrtcPtr crtc,
+          RRModePtr mode,
+          int x,
+          int y, Rotation rotation, int numOutputs, RROutputPtr * outputs, Bool is_res_change)
+#else
 RRCrtcSet(RRCrtcPtr crtc,
           RRModePtr mode,
           int x,
           int y, Rotation rotation, int numOutputs, RROutputPtr * outputs)
+#endif
 {
     ScreenPtr pScreen = crtc->pScreen;
     Bool ret = FALSE;
     Bool recompute = TRUE;
+    Bool crtcChanged;
+    int  o;
 
     rrScrPriv(pScreen);
+
+    crtcChanged = FALSE;
+    for (o = 0; o < numOutputs; o++) {
+        if (outputs[o] && outputs[o]->crtc != crtc) {
+            crtcChanged = TRUE;
+            break;
+        }
+    }
 
     /* See if nothing changed */
     if (crtc->mode == mode &&
@@ -529,7 +550,8 @@ RRCrtcSet(RRCrtcPtr crtc,
         crtc->rotation == rotation &&
         crtc->numOutputs == numOutputs &&
         !memcmp(crtc->outputs, outputs, numOutputs * sizeof(RROutputPtr)) &&
-        !RRCrtcPendingProperties(crtc) && !RRCrtcPendingTransform(crtc)) {
+        !RRCrtcPendingProperties(crtc) && !RRCrtcPendingTransform(crtc) &&
+        !crtcChanged) {
         recompute = FALSE;
         ret = TRUE;
     }
@@ -556,8 +578,14 @@ RRCrtcSet(RRCrtcPtr crtc,
         }
 #if RANDR_12_INTERFACE
         if (pScrPriv->rrCrtcSet) {
+
+#ifdef _F_XF86_DISABLE_UNUSED_FUNC_RESCHANGE_
+            ret = (*pScrPriv->rrCrtcSet) (pScreen, crtc, mode, x, y,
+                                          rotation, numOutputs, outputs, FALSE);
+#else
             ret = (*pScrPriv->rrCrtcSet) (pScreen, crtc, mode, x, y,
                                           rotation, numOutputs, outputs);
+#endif
         }
         else
 #endif
@@ -601,7 +629,6 @@ RRCrtcSet(RRCrtcPtr crtc,
 #endif
         }
         if (ret) {
-            int o;
 
             RRTellChanged(pScreen);
 
@@ -650,7 +677,7 @@ RRCrtcDestroy(RRCrtcPtr crtc)
 }
 
 static int
-RRCrtcDestroyResource(pointer value, XID pid)
+RRCrtcDestroyResource(void *value, XID pid)
 {
     RRCrtcPtr crtc = (RRCrtcPtr) value;
     ScreenPtr pScreen = crtc->pScreen;
@@ -667,6 +694,8 @@ RRCrtcDestroyResource(pointer value, XID pid)
                 break;
             }
         }
+
+        RRResourcesChanged(pScreen);
     }
 
     if (crtc->scanout_pixmap)
@@ -1020,7 +1049,7 @@ ProcRRSetCrtcConfig(ClientPtr client)
 
     outputIds = (RROutput *) (stuff + 1);
     for (i = 0; i < numOutputs; i++) {
-        ret = dixLookupResourceByType((pointer *) (outputs + i), outputIds[i],
+        ret = dixLookupResourceByType((void **) (outputs + i), outputIds[i],
                                      RROutputType, client, DixSetAttrAccess);
         if (ret != Success) {
             free(outputs);
@@ -1154,8 +1183,14 @@ ProcRRSetCrtcConfig(ClientPtr client)
 #endif
     }
 
+#ifdef _F_XF86_DISABLE_UNUSED_FUNC_RESCHANGE_
     if (!RRCrtcSet(crtc, mode, stuff->x, stuff->y,
-                   rotation, numOutputs, outputs)) {
+                   rotation, numOutputs, outputs, FALSE))
+#else
+    if (!RRCrtcSet(crtc, mode, stuff->x, stuff->y,
+                   rotation, numOutputs, outputs))
+#endif
+    {
         status = RRSetConfigFailed;
         goto sendReply;
     }
@@ -1698,8 +1733,13 @@ RRReplaceScanoutPixmap(DrawablePtr pDrawable, PixmapPtr pPixmap, Bool enable)
         if (changed && pScrPriv->rrCrtcSet) {
             pScrPriv->rrCrtcSetScanoutPixmap(crtc, crtc->scanout_pixmap);
 
+#ifdef _F_XF86_DISABLE_UNUSED_FUNC_RESCHANGE_
+            (*pScrPriv->rrCrtcSet) (pDrawable->pScreen, crtc, crtc->mode, crtc->x, crtc->y,
+                                    crtc->rotation, crtc->numOutputs, crtc->outputs, FALSE);
+#else
             (*pScrPriv->rrCrtcSet) (pDrawable->pScreen, crtc, crtc->mode, crtc->x, crtc->y,
                                     crtc->rotation, crtc->numOutputs, crtc->outputs);
+#endif
         }
     }
     return ret;

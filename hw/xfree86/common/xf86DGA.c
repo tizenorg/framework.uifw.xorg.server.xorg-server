@@ -450,7 +450,7 @@ xf86SetDGAMode(ScrnInfoPtr pScrn, int num, DGADevicePtr devRet)
                                             pMode->pixmapHeight, pMode->depth,
                                             pMode->bitsPerPixel,
                                             pMode->bytesPerScanline,
-                                            (pointer) (pMode->address));
+                                            (void *) (pMode->address));
         }
     }
 
@@ -1033,6 +1033,9 @@ DGAProcessKeyboardEvent(ScreenPtr pScreen, DGAEvent * event, DeviceIntPtr keybd)
 
     UpdateDeviceState(keybd, &ev);
 
+    if (!IsMaster(keybd))
+        return;
+
     /*
      * Deliver the DGA event
      */
@@ -1074,6 +1077,7 @@ DGAProcessPointerEvent(ScreenPtr pScreen, DGAEvent * event, DeviceIntPtr mouse)
     DeviceEvent ev = {
         .header = ET_Internal,
         .length = sizeof(ev),
+        .detail.key = event->detail,
         .type = event->subtype,
         .corestate = butc ? butc->state : 0
     };
@@ -1082,6 +1086,9 @@ DGAProcessPointerEvent(ScreenPtr pScreen, DGAEvent * event, DeviceIntPtr mouse)
         ev.corestate |= XkbStateFieldFromRec(&master->key->xkbInfo->state);
 
     UpdateDeviceState(mouse, &ev);
+
+    if (!IsMaster(mouse))
+        return;
 
     /*
      * Deliver the DGA event
@@ -1190,9 +1197,6 @@ DGAHandleEvent(int screen_num, InternalEvent *ev, DeviceIntPtr device)
     if (!pScreenPriv)
         return;
 
-    if (!IsMaster(device))
-        return;
-
     switch (event->subtype) {
     case KeyPress:
     case KeyRelease:
@@ -1210,7 +1214,7 @@ DGAHandleEvent(int screen_num, InternalEvent *ev, DeviceIntPtr device)
 
 static void XDGAResetProc(ExtensionEntry * extEntry);
 
-static void DGAClientStateChange(CallbackListPtr *, pointer, pointer);
+static void DGAClientStateChange(CallbackListPtr *, void *, void *);
 
 static DevPrivateKeyRec DGAScreenPrivateKeyRec;
 
@@ -1400,7 +1404,7 @@ ProcXDGAQueryModes(ClientPtr client)
 }
 
 static void
-DGAClientStateChange(CallbackListPtr *pcbl, pointer nulldata, pointer calldata)
+DGAClientStateChange(CallbackListPtr *pcbl, void *nulldata, void *calldata)
 {
     NewClientInfoRec *pci = (NewClientInfoRec *) calldata;
     ClientPtr client = NULL;
@@ -1480,7 +1484,7 @@ ProcXDGASetMode(ClientPtr client)
     DGA_SETCLIENT(stuff->screen, client);
 
     if (pPix) {
-        if (AddResource(stuff->pid, RT_PIXMAP, (pointer) (pPix))) {
+        if (AddResource(stuff->pid, RT_PIXMAP, (void *) (pPix))) {
             pPix->drawable.id = (int) stuff->pid;
             rep.flags = DGA_PIXMAP_AVAILABLE;
         }
@@ -1558,7 +1562,7 @@ ProcXDGAInstallColormap(ClientPtr client)
 
     REQUEST_SIZE_MATCH(xXDGAInstallColormapReq);
 
-    rc = dixLookupResourceByType((pointer *) &cmap, stuff->cmap, RT_COLORMAP,
+    rc = dixLookupResourceByType((void **) &cmap, stuff->cmap, RT_COLORMAP,
                                  client, DixInstallAccess);
     if (rc != Success)
         return rc;
@@ -1987,7 +1991,7 @@ ProcXF86DGAInstallColormap(ClientPtr client)
     if (!DGAActive(stuff->screen))
         return DGAErrorBase + XF86DGADirectNotActivated;
 
-    rc = dixLookupResourceByType((pointer *) &pcmp, stuff->id, RT_COLORMAP,
+    rc = dixLookupResourceByType((void **) &pcmp, stuff->id, RT_COLORMAP,
                                  client, DixInstallAccess);
     if (rc == Success) {
         DGAInstallCmap(pcmp);
@@ -2095,7 +2099,7 @@ ProcXDGADispatch(ClientPtr client)
 {
     REQUEST(xReq);
 
-    if (!LocalClient(client))
+    if (!client->local)
         return DGAErrorBase + XF86DGAClientNotLocal;
 
 #ifdef DGA_REQ_DEBUG

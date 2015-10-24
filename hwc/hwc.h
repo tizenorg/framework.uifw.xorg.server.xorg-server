@@ -26,15 +26,25 @@
 #define _HWC_H_
 
 #include <X11/extensions/hwcproto.h>
+#include "randrstr.h"
 
 #define HWC_SCREEN_INFO_VERSION        0
 
 typedef int (*hwc_open_proc)(ScreenPtr screen, int *maxLayer);
+typedef int (*hwc_open_2_proc)(ScreenPtr screen, RRCrtcPtr crtc, int *maxLayer);
 
 typedef int (*hwc_set_drawables_proc) (ScreenPtr screen,
                                                DrawablePtr *drawables,
                                                xRectangle *pSrcRects,
                                                xRectangle *pDstRects,
+                                               int count);
+
+typedef int (*hwc_set_drawables_2_proc) (ScreenPtr screen,
+                                               RRCrtcPtr crtc,
+                                               DrawablePtr *drawables,
+                                               xRectangle *pSrcRects,
+                                               xRectangle *pDstRects,
+                                               HWCCompositeMethod *copmMethods,
                                                int count);
 
 typedef int (*hwc_update_drawable) (ScreenPtr screen,
@@ -68,6 +78,11 @@ typedef struct hwc_screen_info {
     hwc_update_drawable     update_drawable;
     hwc_move_drawable       move_drawable;
     hwc_resize_drawable       resize_drawable;
+
+    /*V2.0*/
+    hwc_open_2_proc         open2;
+    hwc_set_drawables_2_proc set_drawables2;
+
 } hwc_screen_info_rec, *hwc_screen_info_ptr;
 
 extern _X_EXPORT Bool
@@ -76,10 +91,16 @@ hwc_screen_init(ScreenPtr screen, hwc_screen_info_ptr info);
 extern _X_EXPORT void
 hwc_send_config_notify(ScreenPtr screen, int maxLayer);
 
-int
-hwc_open(ClientPtr client, ScreenPtr screen, int *maxLayer);
+extern _X_EXPORT void
+hwc_send_config_notify2(ScreenPtr screen, RRCrtcPtr crtc, int maxLayer);
 
 int
-hwc_set_drawables(ClientPtr client, ScreenPtr screen, XID* drawables, xRectangle *srcRects, xRectangle *dstRects, int count);
+hwc_open(ClientPtr client, ScreenPtr screen, RRCrtcPtr crtc, int *maxLayer);
+
+int
+hwc_set_drawables(ClientPtr client, ScreenPtr screen, RRCrtcPtr crtc,  XID* drawables, xRectangle *srcRects, xRectangle *dstRects, HWCCompositeMethod *copmMethods, int count);
+
+/* Check does given window (drawable) belong to HWC windows*/
+int hwc_validate_window(WindowPtr window);
 
 #endif /* _HWC_H_ */

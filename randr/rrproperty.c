@@ -24,13 +24,39 @@
 #include "propertyst.h"
 #include "swaprep.h"
 
+#ifdef _F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_
+#define STEREOSCOPIC_ATOM "_E_COMP_STEREOSCOPIC_MODE"
+#define GFX_PLANE   1
+#define INIT_DEFAULT -1
+
+typedef struct _Data_Rrprop
+{
+   unsigned int freq;
+   unsigned int b_is_component;
+   int mode_3d; // 3D mode
+   int format_3d; // 3D format
+   Bool is_single_source;
+   Window win ;
+   short fb_width;
+   short fb_height ;
+   short x_L ;
+   short y_L;
+   short w_L ;
+   short h_L ;
+   short x_R ;
+   short y_R ;
+   short w_R ;
+   short h_R ;
+} Data_RRprop;
+#endif
+
 static int
 DeliverPropertyEvent(WindowPtr pWin, void *value)
 {
     xRROutputPropertyNotifyEvent *event = value;
     RREventPtr *pHead, pRREvent;
 
-    dixLookupResourceByType((pointer *) &pHead, pWin->drawable.id,
+    dixLookupResourceByType((void **) &pHead, pWin->drawable.id,
                             RREventType, serverClient, DixReadAccess);
     if (!pHead)
         return WT_WALKCHILDREN;
@@ -135,7 +161,7 @@ RRDeleteOutputProperty(RROutputPtr output, Atom property)
 int
 RRChangeOutputProperty(RROutputPtr output, Atom property, Atom type,
                        int format, int mode, unsigned long len,
-                       pointer value, Bool sendevent, Bool pending)
+                       void *value, Bool sendevent, Bool pending)
 {
     RRPropertyPtr prop;
     rrScrPrivPtr pScrPriv = rrGetScrPriv(output->pScreen);
@@ -178,10 +204,10 @@ RRChangeOutputProperty(RROutputPtr output, Atom property, Atom type,
         total_len = prop_value->size + len;
 
     if (mode == PropModeReplace || len > 0) {
-        pointer new_data = NULL, old_data = NULL;
+        void *new_data = NULL, *old_data = NULL;
 
         total_size = total_len * size_in_bytes;
-        new_value.data = (pointer) malloc(total_size);
+        new_value.data = (void *) malloc(total_size);
         if (!new_value.data && total_size) {
             if (add)
                 RRDestroyOutputProperty(prop);
@@ -197,13 +223,13 @@ RRChangeOutputProperty(RROutputPtr output, Atom property, Atom type,
             old_data = NULL;
             break;
         case PropModeAppend:
-            new_data = (pointer) (((char *) new_value.data) +
+            new_data = (void *) (((char *) new_value.data) +
                                   (prop_value->size * size_in_bytes));
             old_data = new_value.data;
             break;
         case PropModePrepend:
             new_data = new_value.data;
-            old_data = (pointer) (((char *) new_value.data) +
+            old_data = (void *) (((char *) new_value.data) +
                                   (prop_value->size * size_in_bytes));
             break;
         }
@@ -538,7 +564,7 @@ ProcRRChangeOutputProperty(ClientPtr client)
 
     err = RRChangeOutputProperty(output, stuff->property,
                                  stuff->type, (int) format,
-                                 (int) mode, len, (pointer) &stuff[1], TRUE,
+                                 (int) mode, len, (void *) &stuff[1], TRUE,
                                  TRUE);
     if (err != Success)
         return err;
@@ -587,6 +613,15 @@ ProcRRGetOutputProperty(ClientPtr client)
     RROutputPtr output;
     xRRGetOutputPropertyReply reply;
     char *extra = NULL;
+
+#ifdef _F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_
+    /* BEGIN : added for stereoscopic mode support */
+    DrawRect* rect[RECT_MAX] ;
+    short new_w = INIT_DEFAULT ;
+    short new_h = INIT_DEFAULT ;
+    Data_RRprop *stereoData = NULL ;
+    /* END : added for stereoscopic mode support */
+#endif
 
     REQUEST_SIZE_MATCH(xRRGetOutputPropertyReq);
     if (stuff->delete)
@@ -638,6 +673,47 @@ ProcRRGetOutputProperty(ClientPtr client)
     prop_value = RRGetOutputProperty(output, stuff->property, stuff->pending);
     if (!prop_value)
         return BadAtom;
+
+#ifdef _F_STEREOSCOPIC_SEND_FBSIZE_TO_WM_
+    /* BEGIN : added for stereoscopic support */
+    Atom stereoAtom = MakeAtom(STEREOSCOPIC_ATOM,
+                        strlen(STEREOSCOPIC_ATOM), FALSE ) ;
+    if (stereoAtom == stuff->property)
+    {
+        rect[RECT_L] = (DrawRect*)malloc(sizeof(DrawRect));
+        rect[RECT_R] = (DrawRect*)malloc(sizeof(DrawRect));
+
+        rrScrPrivPtr pScrPriv = rrGetScrPriv(output->pScreen);
+        if (pScrPriv->getStereoBufferSize)
+        {
+            pScrPriv->getStereoBufferSize(output, GFX_PLANE, &new_w, &new_h);
+        }
+
+        if (pScrPriv->getDrawingRect)
+        {
+            pScrPriv->getDrawingRect(output, GFX_PLANE, rect);
+        }
+
+        stereoData = (Data_RRprop *)prop_value->data ;
+        if (NULL != stereoData)
+        {
+            stereoData->fb_width = new_w ;
+            stereoData->fb_height = new_h ;
+            stereoData->x_L = rect[RECT_L]->x ;
+            stereoData->y_L = rect[RECT_L]->y ;
+            stereoData->w_L = rect[RECT_L]->w ;
+            stereoData->h_L = rect[RECT_L]->h ;
+            stereoData->x_R = rect[RECT_R]->x ;
+            stereoData->y_R = rect[RECT_R]->y ;
+            stereoData->w_R = rect[RECT_R]->w ;
+            stereoData->h_R = rect[RECT_R]->h ;
+        }
+
+        free(rect[RECT_L]) ;
+        free(rect[RECT_R]) ;
+    }
+    /* END : added for stereoscopic support */
+#endif
 
     /* If the request type and actual type don't match. Return the
        property information, but not the data. */

@@ -86,7 +86,6 @@ SOFTWARE.
 #undef DBE
 #undef SCREENSAVER
 #undef RANDR
-#undef XFIXES
 #undef DAMAGE
 #undef COMPOSITE
 #undef MITSHM
@@ -126,6 +125,9 @@ static ExtensionToggle ExtensionToggleList[] = {
 #ifdef COMPOSITE
     {"Composite", &noCompositeExtension},
 #endif
+#ifdef CONTAINER
+    {"Container", &noContainerExtension},
+#endif //_F_CONTAINER_EXTENSION_
 #ifdef DAMAGE
     {"DAMAGE", &noDamageExtension},
 #endif
@@ -157,7 +159,7 @@ static ExtensionToggle ExtensionToggleList[] = {
 #ifdef XF86BIGFONT
     {"XFree86-Bigfont", &noXFree86BigfontExtension},
 #endif
-#ifdef XorgLoader
+#ifdef XORGSERVER
 #ifdef XFreeXDGA
     {"XFree86-DGA", &noXFree86DGAExtension},
 #endif
@@ -168,9 +170,7 @@ static ExtensionToggle ExtensionToggleList[] = {
     {"XFree86-VidModeExtension", &noXFree86VidModeExtension},
 #endif
 #endif
-#ifdef XFIXES
     {"XFIXES", &noXFixesExtension},
-#endif
 #ifdef PANORAMIX
     {"XINERAMA", &noPanoramiXExtension},
 #endif
@@ -185,6 +185,27 @@ static ExtensionToggle ExtensionToggleList[] = {
     {"XTEST", &noTestExtensions},
 #ifdef XV
     {"XVideo", &noXvExtension},
+#endif
+#ifdef _F_DRI2_RUNTIME_DISABLE_EXT_
+#ifdef DRI2
+    {"DRI2", &noDRI2Extension},
+#endif
+#endif
+#ifdef _F_RUN_TIME_DISABLE_EXTENSION_
+#ifdef DRI3
+    {"DRI3", &noDRI3Extension},
+#endif
+#ifdef PRESENT
+#ifdef DRI3
+    {"Present", &noPresentExtension},
+#endif
+#endif
+#ifdef HWC
+    {"HWC", &noHWCExtension},
+#endif
+#ifdef HWA
+    {"HWA", &noHWAExtension},
+#endif
 #endif
 };
 
@@ -215,10 +236,12 @@ EnableDisableExtension(const char *name, Bool enable)
 void
 EnableDisableExtensionError(const char *name, Bool enable)
 {
-    ExtensionToggle *ext = &ExtensionToggleList[0];
+    ExtensionToggle *ext;
+    int i;
     Bool found = FALSE;
 
-    for (ext = &ExtensionToggleList[0]; ext->name != NULL; ext++) {
+    for (i = 0; i < ARRAY_SIZE(ExtensionToggleList); i++) {
+        ext = &ExtensionToggleList[i];
         if ((strcmp(name, ext->name) == 0) && (ext->disablePtr == NULL)) {
             ErrorF("[mi] Extension \"%s\" can not be disabled\n", name);
             found = TRUE;
@@ -229,7 +252,8 @@ EnableDisableExtensionError(const char *name, Bool enable)
         ErrorF("[mi] Extension \"%s\" is not recognized\n", name);
     ErrorF("[mi] Only the following extensions can be run-time %s:\n",
            enable ? "enabled" : "disabled");
-    for (ext = &ExtensionToggleList[0]; ext->name != NULL; ext++) {
+    for (i = 0; i < ARRAY_SIZE(ExtensionToggleList); i++) {
+        ext = &ExtensionToggleList[i];
         if (ext->disablePtr != NULL) {
             ErrorF("[mi]    %s\n", ext->name);
         }
@@ -237,7 +261,7 @@ EnableDisableExtensionError(const char *name, Bool enable)
 }
 
 /* List of built-in (statically linked) extensions */
-static ExtensionModule staticExtensions[] = {
+static const ExtensionModule staticExtensions[] = {
     {GEExtensionInit, "Generic Event Extension", &noGEExtension},
     {ShapeExtensionInit, "SHAPE", NULL},
 #ifdef _F_GESTURE_EXTENSION_
@@ -266,10 +290,8 @@ static ExtensionModule staticExtensions[] = {
      */
     {PseudoramiXExtensionInit, "PseudoramiX", &noPseudoramiXExtension},
 #endif
-#ifdef XFIXES
     /* must be before Render to layer DisplayCursor correctly */
     {XFixesExtensionInit, "XFIXES", &noXFixesExtension},
-#endif
 #ifdef XF86BIGFONT
     {XFree86BigfontExtensionInit, XF86BIGFONTNAME, &noXFree86BigfontExtension},
 #endif
@@ -295,6 +317,21 @@ static ExtensionModule staticExtensions[] = {
 #ifdef DPMSExtension
     {DPMSExtensionInit, DPMSExtensionName, &noDPMSExtension},
 #endif
+#ifdef _F_RUN_TIME_DISABLE_EXTENSION_
+#ifdef PRESENT
+    {present_extension_init, PRESENT_NAME, &noPresentExtension},
+#endif
+#ifdef DRI3
+    {dri3_extension_init, DRI3_NAME, &noDRI3Extension},
+#endif
+#else
+#ifdef PRESENT
+    {present_extension_init, PRESENT_NAME, NULL},
+#endif
+#ifdef DRI3
+    {dri3_extension_init, DRI3_NAME, NULL},
+#endif
+#endif
 #ifdef RES
     {ResExtensionInit, XRES_NAME, &noResExtension},
 #endif
@@ -309,8 +346,14 @@ static ExtensionModule staticExtensions[] = {
     {SmackExtensionInit, SMACK_EXTENSION_NAME, &noSmackExtension},
 #endif
 #ifdef HWC
-    { hwc_extension_init, HWC_NAME, NULL},
+    { hwc_extension_init, HWC_NAME, &noHWCExtension},
 #endif //_F_HWC_EXTENSION_
+#ifdef HWA
+    { hwa_extension_init, HWA_NAME, &noHWAExtension},
+#endif //_F_HWA_EXTENSION_
+#ifdef CONTAINER
+    {ContainerExtensionInit, CONTAINER_EXTENSION_NAME, &noContainerExtension},
+#endif //_F_CONTAINER_EXTENSION_
 };
 
 static ExtensionModule *ExtensionModuleList = NULL;
@@ -320,15 +363,13 @@ static void
 AddStaticExtensions(void)
 {
     static Bool listInitialised = FALSE;
-    int i;
 
     if (listInitialised)
         return;
     listInitialised = TRUE;
 
     /* Add built-in extensions to the list. */
-    for (i = 0; i < ARRAY_SIZE(staticExtensions); i++)
-        LoadExtension(&staticExtensions[i], TRUE);
+    LoadExtensionList(staticExtensions, ARRAY_SIZE(staticExtensions), TRUE);
 }
 
 void
@@ -339,7 +380,7 @@ InitExtensions(int argc, char *argv[])
 
     AddStaticExtensions();
 
-    for (i = 0; ExtensionModuleList[i].name != NULL; i++) {
+    for (i = 0; i < numExtensionModules; i++) {
         ext = &ExtensionModuleList[i];
         if (ext->initFunc != NULL &&
             (ext->disablePtr == NULL || !*ext->disablePtr)) {
@@ -349,50 +390,44 @@ InitExtensions(int argc, char *argv[])
 }
 
 static ExtensionModule *
-NewExtensionModule(void)
+NewExtensionModuleList(int size)
 {
     ExtensionModule *save = ExtensionModuleList;
     int n;
-
-    /* Make sure built-in extensions get added to the list before those
-     * in modules. */
-    AddStaticExtensions();
 
     /* Sanity check */
     if (!ExtensionModuleList)
         numExtensionModules = 0;
 
-    n = numExtensionModules + 1;
+    n = numExtensionModules + size;
     ExtensionModuleList = realloc(ExtensionModuleList,
-                                  (n + 1) * sizeof(ExtensionModule));
+                                  n * sizeof(ExtensionModule));
     if (ExtensionModuleList == NULL) {
         ExtensionModuleList = save;
         return NULL;
     }
     else {
-        numExtensionModules++;
-        ExtensionModuleList[numExtensionModules].name = NULL;
-        return ExtensionModuleList + (numExtensionModules - 1);
+        numExtensionModules += size;
+        return ExtensionModuleList + (numExtensionModules - size);
     }
 }
 
 void
-LoadExtension(ExtensionModule * e, Bool builtin)
+LoadExtensionList(const ExtensionModule ext[], int size, Bool builtin)
 {
     ExtensionModule *newext;
+    int i;
 
-    if (e == NULL || e->name == NULL)
+    /* Make sure built-in extensions get added to the list before those
+     * in modules. */
+    AddStaticExtensions();
+
+    if (!(newext = NewExtensionModuleList(size)))
         return;
 
-    if (!(newext = NewExtensionModule()))
-        return;
-
-    if (builtin)
-        ErrorF("Initializing built-in extension %s\n", e->name);
-    else
-        ErrorF("Loading extension %s\n", e->name);
-
-    newext->name = e->name;
-    newext->initFunc = e->initFunc;
-    newext->disablePtr = e->disablePtr;
+    for (i = 0; i < size; i++, newext++) {
+        newext->name = ext[i].name;
+        newext->initFunc = ext[i].initFunc;
+        newext->disablePtr = ext[i].disablePtr;
+    }
 }

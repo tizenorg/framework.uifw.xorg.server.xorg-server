@@ -26,13 +26,13 @@ Copyright 1987 by Digital Equipment Corporation, Maynard, Massachusetts.
 
                         All Rights Reserved
 
-Permission to use, copy, modify, and distribute this software and its 
-documentation for any purpose and without fee is hereby granted, 
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
 provided that the above copyright notice appear in all copies and that
-both that copyright notice and this permission notice appear in 
+both that copyright notice and this permission notice appear in
 supporting documentation, and that the name of Digital not be
 used in advertising or publicity pertaining to distribution of the
-software without specific, written prior permission.  
+software without specific, written prior permission.
 
 DIGITAL DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING
 ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO EVENT SHALL
@@ -56,6 +56,24 @@ SOFTWARE.
 #include "dispatch.h"
 #include "swaprep.h"
 #include "xace.h"
+
+#ifdef _F_GLOBAL_CURSOR_STATE_
+#include "xf86drm.h"
+#include "drm/sdp_drm.h"
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+/* Defined to manage global cursor state show/hide */
+int global_cursor_state = 0;
+/* Defined to block/unblock core  devices  */
+int global_device_state=0;
+
+
+#define DRM_SDP_QPI_SET_GP_SYNCONOFF 0x56
+#define DRM_IOCTL_SDP_QPI_SET_GP_SYNCONOFF DRM_IOWR(DRM_COMMAND_BASE+DRM_SDP_QPI_SET_GP_SYNCONOFF,uint32_t)
+#endif
 
 /*****************************************************************
  * Property Stuff
@@ -230,6 +248,66 @@ ProcChangeProperty(ClientPtr client)
         return BadAtom;
     }
 
+#ifdef _F_GLOBAL_CURSOR_STATE_
+    Atom mute_atom;
+    mute_atom = MakeAtom("WM_PLANE_MUTE_REQUEST",strlen("WM_PLANE_MUTE_REQUEST"), TRUE);
+
+    if(mute_atom == stuff->property)
+    {
+        int prop_val = 0;
+        memcpy(&prop_val, (int *)&stuff[1], sizeof(int));
+
+        int status = 0;
+        int value = 0;
+        /* open drm connection */
+        int fd = open("/dev/dri/card0", O_RDWR);
+        if (fd >= 0)  /* Prevent Fix for DF150120-00405*/
+        {
+            if (prop_val)
+            {
+                value = 1;   /* 1: mute off */
+                status = drmIoctl(fd, DRM_IOCTL_SDP_QPI_SET_GP_SYNCONOFF, &value);
+            }
+            else
+            {
+                value = 0;   /* 0 :mute on */
+                status = drmIoctl(fd, DRM_IOCTL_SDP_QPI_SET_GP_SYNCONOFF, &value);
+            }
+            close(fd);
+        }
+    }
+
+    Atom cursor_atom;
+    cursor_atom = MakeAtom("_CURSOR_SHOW_STATE",strlen("_CURSOR_SHOW_STATE"), TRUE);
+
+
+    if(cursor_atom == stuff->property) {
+        int prop_val = 0;
+        memcpy(&prop_val, (int *)&stuff[1], sizeof(int));
+        if (prop_val) {
+                global_cursor_state = TRUE;
+        }
+        else {
+                global_cursor_state = FALSE;
+        }
+    }
+
+    Atom check_coredevice_atom;
+    check_coredevice_atom = MakeAtom("_BLOCK_CORE_DEVICE",strlen("_BLOCK_CORE_DEVICE"), TRUE);
+
+
+    if(check_coredevice_atom == stuff->property) {
+        int prop_value = 0;
+        memcpy(&prop_value, (int *)&stuff[1], sizeof(int));
+        if (prop_value) {
+                global_device_state = TRUE;
+        }
+        else {
+                global_device_state = FALSE;
+        }
+    }
+#endif
+
     err = dixChangeWindowProperty(client, pWin, stuff->property, stuff->type,
                                   (int) format, (int) mode, len, &stuff[1],
                                   TRUE);
@@ -242,7 +320,7 @@ ProcChangeProperty(ClientPtr client)
 int
 dixChangeWindowProperty(ClientPtr pClient, WindowPtr pWin, Atom property,
                         Atom type, int format, int mode, unsigned long len,
-                        pointer value, Bool sendevent)
+                        void *value, Bool sendevent)
 {
     PropertyPtr pProp;
     PropertyRec savedProp;
@@ -356,7 +434,7 @@ dixChangeWindowProperty(ClientPtr pClient, WindowPtr pWin, Atom property,
 
 int
 ChangeWindowProperty(WindowPtr pWin, Atom property, Atom type, int format,
-                     int mode, unsigned long len, pointer value, Bool sendevent)
+                     int mode, unsigned long len, void *value, Bool sendevent)
 {
     return dixChangeWindowProperty(serverClient, pWin, property, type, format,
                                    mode, len, value, sendevent);

@@ -43,6 +43,7 @@ SOFTWARE.
 #include "xvdix.h"
 #ifdef MITSHM
 #include <X11/extensions/shmproto.h>
+#include "shmint.h"
 #endif
 
 #include "xvdisp.h"
@@ -52,6 +53,10 @@ SOFTWARE.
 #include "panoramiXsrv.h"
 
 unsigned long XvXRTPort;
+#endif
+
+#ifdef _F_XV_PUTSTILL_CHECK_PRIVILEGE_
+#include "extinit.h"
 #endif
 
 static int
@@ -512,6 +517,11 @@ ProcXvPutStill(ClientPtr client)
     XvPortPtr pPort;
     GCPtr pGC;
     int status;
+    int result;
+#ifdef _F_XV_PUTSTILL_CHECK_PRIVILEGE_
+    int ret = 0;
+#endif
+    TTRACE_VIDEO_BEGIN("XORG:XV:DISP_PUTSTILL");
 
     REQUEST(xvPutStillReq);
     REQUEST_SIZE_MATCH(xvPutStillReq);
@@ -521,23 +531,38 @@ ProcXvPutStill(ClientPtr client)
 
     if ((status = _AllocatePort(stuff->port, pPort)) != Success) {
         client->errorValue = stuff->port;
+        TTRACE_VIDEO_END();
         return status;
     }
 
     if (!(pPort->pAdaptor->type & XvInputMask) ||
         !(pPort->pAdaptor->type & XvStillMask)) {
         client->errorValue = stuff->port;
+        TTRACE_VIDEO_END();
         return BadMatch;
     }
 
     status = XvdiMatchPort(pPort, pDraw);
     if (status != Success) {
+        TTRACE_VIDEO_END();
         return status;
     }
 
-    return XvdiPutStill(client, pDraw, pPort, pGC, stuff->vid_x, stuff->vid_y,
+#ifdef _F_XV_PUTSTILL_CHECK_PRIVILEGE_
+    ret = SmackUtilHaveAuthority(client, "xorg::screencapture", DixReadAccess);
+    if (ret != Success) {
+        TTRACE_VIDEO_END();
+        return BadAccess;
+    }
+#endif
+
+    result =  XvdiPutStill(client, pDraw, pPort, pGC, stuff->vid_x, stuff->vid_y,
                         stuff->vid_w, stuff->vid_h, stuff->drw_x, stuff->drw_y,
                         stuff->drw_w, stuff->drw_h);
+
+    TTRACE_VIDEO_END();
+
+    return result;
 }
 
 static int
@@ -702,7 +727,7 @@ ProcXvUngrabPort(ClientPtr client)
 static int
 ProcXvStopVideo(ClientPtr client)
 {
-    int status, rc;
+    int status, ret;
     DrawablePtr pDraw;
     XvPortPtr pPort;
 
@@ -716,9 +741,9 @@ ProcXvStopVideo(ClientPtr client)
         return status;
     }
 
-    rc = dixLookupDrawable(&pDraw, stuff->drawable, client, 0, DixWriteAccess);
-    if (rc != Success)
-        return rc;
+    ret = dixLookupDrawable(&pDraw, stuff->drawable, client, 0, DixWriteAccess);
+    if (ret != Success)
+        return ret;
 
     return XvdiStopVideo(client, pPort, pDraw);
 }
@@ -894,6 +919,9 @@ ProcXvPutImage(ClientPtr client)
     GCPtr pGC;
     int status, i, size;
     CARD16 width, height;
+    int result;
+
+    TTRACE_VIDEO_BEGIN("XORG:XV:DISP_PUTIMAGE");
 
     REQUEST(xvPutImageReq);
     REQUEST_AT_LEAST_SIZE(xvPutImageReq);
@@ -903,17 +931,20 @@ ProcXvPutImage(ClientPtr client)
 
     if ((status = _AllocatePort(stuff->port, pPort)) != Success) {
         client->errorValue = stuff->port;
+        TTRACE_VIDEO_END();
         return status;
     }
 
     if (!(pPort->pAdaptor->type & XvImageMask) ||
         !(pPort->pAdaptor->type & XvInputMask)) {
         client->errorValue = stuff->port;
+        TTRACE_VIDEO_END();
         return BadMatch;
     }
 
     status = XvdiMatchPort(pPort, pDraw);
     if (status != Success) {
+        TTRACE_VIDEO_END();
         return status;
     }
 
@@ -925,7 +956,10 @@ ProcXvPutImage(ClientPtr client)
     }
 
     if (!pImage)
+    {
+        TTRACE_VIDEO_END();
         return BadMatch;
+    }
 
     width = stuff->width;
     height = stuff->height;
@@ -936,31 +970,29 @@ ProcXvPutImage(ClientPtr client)
     size = bytes_to_int32(size);
 
     if ((width < stuff->width) || (height < stuff->height))
+    {
+        TTRACE_VIDEO_END();
         return BadValue;
+    }
 
     if (client->req_len < size)
+    {
+        TTRACE_VIDEO_END();
         return BadLength;
+    }
 
-    return XvdiPutImage(client, pDraw, pPort, pGC, stuff->src_x, stuff->src_y,
+    result = XvdiPutImage(client, pDraw, pPort, pGC, stuff->src_x, stuff->src_y,
                         stuff->src_w, stuff->src_h, stuff->drw_x, stuff->drw_y,
                         stuff->drw_w, stuff->drw_h, pImage,
                         (unsigned char *) (&stuff[1]), FALSE,
                         stuff->width, stuff->height);
+
+    TTRACE_VIDEO_END();
+
+    return result;
 }
 
 #ifdef MITSHM
-/* redefined here since it's not in any header file */
-typedef struct _ShmDesc {
-    struct _ShmDesc *next;
-    int shmid;
-    int refcnt;
-    char *addr;
-    Bool writable;
-    unsigned long size;
-} ShmDescRec, *ShmDescPtr;
-
-extern RESTYPE ShmSegType;
-extern int ShmCompletionCode;
 
 static int
 ProcXvShmPutImage(ClientPtr client)
@@ -973,6 +1005,8 @@ ProcXvShmPutImage(ClientPtr client)
     int status, size_needed, i;
     CARD16 width, height;
 
+    TTRACE_VIDEO_BEGIN("XORG:XV:DISP_SHMPUTIMAGE");
+
     REQUEST(xvShmPutImageReq);
     REQUEST_SIZE_MATCH(xvShmPutImageReq);
 
@@ -981,17 +1015,20 @@ ProcXvShmPutImage(ClientPtr client)
 
     if ((status = _AllocatePort(stuff->port, pPort)) != Success) {
         client->errorValue = stuff->port;
+        TTRACE_VIDEO_END();
         return status;
     }
 
     if (!(pPort->pAdaptor->type & XvImageMask) ||
         !(pPort->pAdaptor->type & XvInputMask)) {
         client->errorValue = stuff->port;
+        TTRACE_VIDEO_END();
         return BadMatch;
     }
 
     status = XvdiMatchPort(pPort, pDraw);
     if (status != Success) {
+        TTRACE_VIDEO_END();
         return status;
     }
 
@@ -1003,12 +1040,18 @@ ProcXvShmPutImage(ClientPtr client)
     }
 
     if (!pImage)
+    {
+        TTRACE_VIDEO_END();
         return BadMatch;
+    }
 
-    status = dixLookupResourceByType((pointer *) &shmdesc, stuff->shmseg,
+    status = dixLookupResourceByType((void **) &shmdesc, stuff->shmseg,
                                      ShmSegType, serverClient, DixReadAccess);
     if (status != Success)
+    {
+        TTRACE_VIDEO_END();
         return status;
+    }
 
     width = stuff->width;
     height = stuff->height;
@@ -1017,10 +1060,16 @@ ProcXvShmPutImage(ClientPtr client)
                                                               &width, &height,
                                                               NULL, NULL);
     if ((size_needed + stuff->offset) > shmdesc->size)
+    {
+        TTRACE_VIDEO_END();
         return BadAccess;
+    }
 
     if ((width < stuff->width) || (height < stuff->height))
+    {
+        TTRACE_VIDEO_END();
         return BadValue;
+    }
 
     status = XvdiPutImage(client, pDraw, pPort, pGC, stuff->src_x, stuff->src_y,
                           stuff->src_w, stuff->src_h, stuff->drw_x,
@@ -1039,6 +1088,8 @@ ProcXvShmPutImage(ClientPtr client)
         };
         WriteEventsToClient(client, 1, (xEvent *) &ev);
     }
+
+    TTRACE_VIDEO_END();
 
     return status;
 }
@@ -1523,12 +1574,12 @@ XineramaXvStopVideo(ClientPtr client)
     REQUEST(xvStopVideoReq);
     REQUEST_SIZE_MATCH(xvStopVideoReq);
 
-    result = dixLookupResourceByClass((pointer *) &draw, stuff->drawable,
+    result = dixLookupResourceByClass((void **) &draw, stuff->drawable,
                                       XRC_DRAWABLE, client, DixWriteAccess);
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
 
-    result = dixLookupResourceByType((pointer *) &port, stuff->port,
+    result = dixLookupResourceByType((void **) &port, stuff->port,
                                      XvXRTPort, client, DixReadAccess);
     if (result != Success)
         return result;
@@ -1553,7 +1604,7 @@ XineramaXvSetPortAttribute(ClientPtr client)
 
     REQUEST_SIZE_MATCH(xvSetPortAttributeReq);
 
-    result = dixLookupResourceByType((pointer *) &port, stuff->port,
+    result = dixLookupResourceByType((void **) &port, stuff->port,
                                      XvXRTPort, client, DixReadAccess);
     if (result != Success)
         return result;
@@ -1579,17 +1630,17 @@ XineramaXvShmPutImage(ClientPtr client)
 
     REQUEST_SIZE_MATCH(xvShmPutImageReq);
 
-    result = dixLookupResourceByClass((pointer *) &draw, stuff->drawable,
+    result = dixLookupResourceByClass((void **) &draw, stuff->drawable,
                                       XRC_DRAWABLE, client, DixWriteAccess);
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
 
-    result = dixLookupResourceByType((pointer *) &gc, stuff->gc,
+    result = dixLookupResourceByType((void **) &gc, stuff->gc,
                                      XRT_GC, client, DixReadAccess);
     if (result != Success)
         return result;
 
-    result = dixLookupResourceByType((pointer *) &port, stuff->port,
+    result = dixLookupResourceByType((void **) &port, stuff->port,
                                      XvXRTPort, client, DixReadAccess);
     if (result != Success)
         return result;
@@ -1631,17 +1682,17 @@ XineramaXvPutImage(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xvPutImageReq);
 
-    result = dixLookupResourceByClass((pointer *) &draw, stuff->drawable,
+    result = dixLookupResourceByClass((void **) &draw, stuff->drawable,
                                       XRC_DRAWABLE, client, DixWriteAccess);
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
 
-    result = dixLookupResourceByType((pointer *) &gc, stuff->gc,
+    result = dixLookupResourceByType((void **) &gc, stuff->gc,
                                      XRT_GC, client, DixReadAccess);
     if (result != Success)
         return result;
 
-    result = dixLookupResourceByType((pointer *) &port, stuff->port,
+    result = dixLookupResourceByType((void **) &port, stuff->port,
                                      XvXRTPort, client, DixReadAccess);
     if (result != Success)
         return result;
@@ -1679,17 +1730,17 @@ XineramaXvPutVideo(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xvPutVideoReq);
 
-    result = dixLookupResourceByClass((pointer *) &draw, stuff->drawable,
+    result = dixLookupResourceByClass((void **) &draw, stuff->drawable,
                                       XRC_DRAWABLE, client, DixWriteAccess);
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
 
-    result = dixLookupResourceByType((pointer *) &gc, stuff->gc,
+    result = dixLookupResourceByType((void **) &gc, stuff->gc,
                                      XRT_GC, client, DixReadAccess);
     if (result != Success)
         return result;
 
-    result = dixLookupResourceByType((pointer *) &port, stuff->port,
+    result = dixLookupResourceByType((void **) &port, stuff->port,
                                      XvXRTPort, client, DixReadAccess);
     if (result != Success)
         return result;
@@ -1727,17 +1778,17 @@ XineramaXvPutStill(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xvPutImageReq);
 
-    result = dixLookupResourceByClass((pointer *) &draw, stuff->drawable,
+    result = dixLookupResourceByClass((void **) &draw, stuff->drawable,
                                       XRC_DRAWABLE, client, DixWriteAccess);
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
 
-    result = dixLookupResourceByType((pointer *) &gc, stuff->gc,
+    result = dixLookupResourceByType((void **) &gc, stuff->gc,
                                      XRT_GC, client, DixReadAccess);
     if (result != Success)
         return result;
 
-    result = dixLookupResourceByType((pointer *) &port, stuff->port,
+    result = dixLookupResourceByType((void **) &port, stuff->port,
                                      XvXRTPort, client, DixReadAccess);
     if (result != Success)
         return result;

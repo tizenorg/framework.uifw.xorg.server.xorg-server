@@ -76,7 +76,7 @@
 
 /*
  *  enable this for debugging
- 
+
     #define COMPOSITE_DEBUG
  */
 
@@ -123,6 +123,11 @@ typedef struct _CompOverlayClientRec {
     XID resource;
 } CompOverlayClientRec;
 
+typedef struct _CompImplicitRedirectException {
+    XID parentVisual;
+    XID winVisual;
+} CompImplicitRedirectException;
+
 typedef struct _CompScreen {
     PositionWindowProcPtr PositionWindow;
     CopyWindowProcPtr CopyWindow;
@@ -159,6 +164,8 @@ typedef struct _CompScreen {
     CloseScreenProcPtr CloseScreen;
     int numAlternateVisuals;
     VisualID *alternateVisuals;
+    int numImplicitRedirectExceptions;
+    CompImplicitRedirectException *implicitRedirectExceptions;
 
     WindowPtr pOverlayWin;
     Window overlayWid;
@@ -323,7 +330,7 @@ WindowPtr
  CompositeRealChildHead(WindowPtr pWin);
 
 int
- DeleteWindowNoInputDevices(pointer value, XID wid);
+ DeleteWindowNoInputDevices(void *value, XID wid);
 
 int
 
@@ -358,6 +365,16 @@ CompositeXYScreenFromWindowRootCoordinate (WindowPtr pWin,
                                           int       y,
                                           int       *screenX,
                                           int       *screenY);
+
+#ifdef _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+void
+CompositeXYScreenFromWindowLeftBufferCoordinate (WindowPtr pWin,
+                                          int       x,
+                                          int       y,
+                                          int       *screenX,
+                                          int       *screenY);
+#endif  // _F_STEREOSCOPIC_LEFT_BUFFER_COODINATE_
+
 int
 CompositeSetCoordinateTransform (ClientPtr pClient, WindowPtr pWin, PictTransformPtr pTransform);
 #endif //_F_INPUT_REDIRECTION_

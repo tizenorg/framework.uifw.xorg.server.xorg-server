@@ -38,7 +38,6 @@
 #include "servermd.h"
 #include "inputstr.h"
 #include "scrnintstr.h"
-#include "mibstore.h"           // mi backing store implementation
 #include "mipointer.h"          // mi software cursor
 #include "micmap.h"             // mi colormap code
 #include "fb.h"                 // fb framebuffer code
@@ -231,13 +230,15 @@ DarwinScreenInit(ScreenPtr pScreen, int argc, char **argv)
     }
 
     // TODO: Make PseudoColor visuals not suck in TrueColor mode
-    //    if(dfb->depth > 8)
-    //        miSetVisualTypesAndMasks(8, PseudoColorMask, 8, PseudoColor, 0, 0, 0);
-    if (dfb->depth > 15)
-        miSetVisualTypesAndMasks(15, TrueColorMask, 5, TrueColor,
-                                 RM_ARGB(0, 5, 5, 5), GM_ARGB(0, 5, 5,
-                                                              5),
-                                 BM_ARGB(0, 5, 5, 5));
+    // if(dfb->depth > 8)
+    //    miSetVisualTypesAndMasks(8, PseudoColorMask, 8, PseudoColor, 0, 0, 0);
+    //
+    // TODO: Re-add support for 15bit
+    // if (dfb->depth > 15)
+    //    miSetVisualTypesAndMasks(15, TrueColorMask, 5, TrueColor,
+    //                             RM_ARGB(0, 5, 5, 5), GM_ARGB(0, 5, 5,
+    //                                                          5),
+    //                             BM_ARGB(0, 5, 5, 5));
     if (dfb->depth > 24)
         miSetVisualTypesAndMasks(24, TrueColorMask, 8, TrueColor,
                                  RM_ARGB(0, 8, 8, 8), GM_ARGB(0, 8, 8,
@@ -703,22 +704,6 @@ OsVendorInit(void)
         free(lf);
 
         DarwinPrintBanner();
-#ifdef ENABLE_DEBUG_LOG
-        {
-            char *home_dir = NULL, *log_file_path = NULL;
-            home_dir = getenv("HOME");
-            if (home_dir) asprintf(&log_file_path, "%s/%s", home_dir,
-                                   DEBUG_LOG_NAME);
-            if (log_file_path) {
-                if (!access(log_file_path, F_OK)) {
-                    debug_log_fp = fopen(log_file_path, "a");
-                    if (debug_log_fp) ErrorF("Debug logging enabled to %s\n",
-                                             log_file_path);
-                }
-                free(log_file_path);
-            }
-        }
-#endif
     }
 }
 

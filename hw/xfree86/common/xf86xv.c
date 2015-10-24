@@ -261,7 +261,7 @@ xf86XVScreenInit(ScreenPtr pScreen, XF86VideoAdaptorPtr * adaptors, int num)
        sure that I appreciate that.  */
 
     ScreenPriv = malloc(sizeof(XF86XVScreenRec));
-    pxvs->devPriv.ptr = (pointer) ScreenPriv;
+    pxvs->devPriv.ptr = (void *) ScreenPriv;
 
     if (!ScreenPriv)
         return FALSE;
@@ -551,7 +551,7 @@ xf86XVInitAdaptors(ScreenPtr pScreen, XF86VideoAdaptorPtr * infoPtr, int number)
         adaptorPriv->PutImage = adaptorPtr->PutImage;
         adaptorPriv->ReputImage = adaptorPtr->ReputImage;       /* image/still */
 
-        pa->devPriv.ptr = (pointer) adaptorPriv;
+        pa->devPriv.ptr = (void *) adaptorPriv;
 
         if (!(pPort = calloc(adaptorPtr->nPorts, sizeof(XvPortRec)))) {
             xf86XVFreeAdaptor(pa);
@@ -811,11 +811,13 @@ xf86XVReputVideo(XvPortRecPrivatePtr portPriv)
         RegionUninit(&VPReg);
     }
 
+#ifndef _F_XV_DO_NOT_CHECK_OBSCURED_
     /* that's all if it's totally obscured */
     if (!RegionNotEmpty(&ClipRegion)) {
         clippedAway = TRUE;
         goto CLIP_VIDEO_BAILOUT;
     }
+#endif
 
     /* bailout if we have to clip but the hardware doesn't support it */
     if (portPriv->AdaptorRec->flags & VIDEO_NO_CLIPPING) {
@@ -957,7 +959,7 @@ xf86XVReputImage(XvPortRecPrivatePtr portPriv)
 }
 
 static int
-xf86XVReputAllVideo(WindowPtr pWin, pointer data)
+xf86XVReputAllVideo(WindowPtr pWin, void *data)
 {
     XF86XVWindowPtr WinPriv = GET_XF86XV_WINDOW(pWin);
 
@@ -1037,12 +1039,13 @@ static void
 xf86XVReputOrStopPort(XvPortRecPrivatePtr pPriv, WindowPtr pWin, Bool visible)
 {
     if (!visible) {
+#ifndef _F_XV_DO_NOT_CHECK_OBSCURED_
         if (pPriv->isOn == XV_ON) {
             (*pPriv->AdaptorRec->StopVideo) (pPriv->pScrn, pPriv->DevPriv.ptr,
                                              FALSE);
             pPriv->isOn = XV_PENDING;
         }
-
+#endif
         if (!pPriv->type)       /* overlaid still/image */
             xf86XVRemovePortFromWindow(pWin, pPriv);
 
@@ -1051,6 +1054,12 @@ xf86XVReputOrStopPort(XvPortRecPrivatePtr pPriv, WindowPtr pWin, Bool visible)
 
     switch (pPriv->type) {
     case XvInputMask:
+#ifdef _XV_REPUTORSTOP_CHECK_XV_OFF_
+        if (pPriv->isOn == XV_OFF || !(pPriv->pDraw)) {
+            xf86Msg(X_INFO, "xf86XVReputVideo called for an invalid scenario. Xv state:%d\n", pPriv->isOn);
+            return;
+        }
+#endif
         xf86XVReputVideo(pPriv);
         break;
     case XvOutputMask:
@@ -1707,7 +1716,13 @@ xf86XVStopVideo(ClientPtr client, XvPortPtr pPort, DrawablePtr pDraw)
         return BadAlloc;
 #endif
 
+#ifdef _F_XV_DRAW_CHECK_NULL_
+    if(pDraw != NULL){
+        xf86XVRemovePortFromWindow((WindowPtr) pDraw, portPriv);
+    }
+#else
     xf86XVRemovePortFromWindow((WindowPtr) pDraw, portPriv);
+#endif
 
     if (!portPriv->pScrn->vtSema)
         return Success;         /* Success ? */
@@ -1949,7 +1964,7 @@ xf86XVFillKeyHelper(ScreenPtr pScreen, CARD32 key, RegionPtr fillboxes)
 }
 
 void
-xf86XVFillKeyHelperPort(DrawablePtr pDraw, pointer data, CARD32 key,
+xf86XVFillKeyHelperPort(DrawablePtr pDraw, void *data, CARD32 key,
                         RegionPtr clipboxes, Bool fillEverything)
 {
     WindowPtr pWin = (WindowPtr) pDraw;

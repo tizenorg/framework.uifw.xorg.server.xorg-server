@@ -92,13 +92,19 @@ wait_for_server_init(void)
 }
 #endif
 
+#ifdef _F_SNIFF_MIEQ_
 EventQueuePtr
 mieqGetEventQueuePtr()
 {
 	return &miEventQueue;
 }
+#endif //_F_SNIFF_MIEQ
 
+#ifdef _F_SNIFF_MIEQ_
 size_t
+#else
+static size_t
+#endif //_F_SNIFF_MIEQ
 mieqNumEnqueued(EventQueuePtr eventQueue)
 {
     size_t n_enqueued = 0;
@@ -276,7 +282,7 @@ mieqEnqueue(DeviceIntPtr pDev, InternalEvent *e)
         else if (miEventQueue.dropped % QUEUE_DROP_BACKTRACE_FREQUENCY == 0 &&
                  miEventQueue.dropped / QUEUE_DROP_BACKTRACE_FREQUENCY <=
                  QUEUE_DROP_BACKTRACE_MAX) {
-            ErrorFSigSafe("[mi] EQ overflow continuing.  %u events have been "
+            ErrorFSigSafe("[mi] EQ overflow continuing.  %zu events have been "
                          "dropped.\n", miEventQueue.dropped);
             if (miEventQueue.dropped / QUEUE_DROP_BACKTRACE_FREQUENCY ==
                 QUEUE_DROP_BACKTRACE_MAX) {
@@ -401,6 +407,10 @@ ChangeDeviceID(DeviceIntPtr dev, InternalEvent *event)
     case ET_RawTouchUpdate:
         event->raw_event.deviceid = dev->id;
         break;
+    case ET_BarrierHit:
+    case ET_BarrierLeave:
+        event->barrier_event.deviceid = dev->id;
+        break;
     default:
         ErrorF("[mi] Unknown event type (%d), cannot change id.\n",
                event->any.type);
@@ -472,8 +482,10 @@ CopyGetMasterEvent(DeviceIntPtr sdev,
 
     mdev = GetMaster(sdev, mtype);
     memcpy(copy, original, len);
-    ChangeDeviceID(mdev, copy);
-    FixUpEventForMaster(mdev, sdev, original, copy);
+    if (mdev) {
+        ChangeDeviceID(mdev, copy);
+        FixUpEventForMaster(mdev, sdev, original, copy);
+    }
 
     return mdev;
 }
@@ -504,6 +516,10 @@ mieqProcessDeviceEvent(DeviceIntPtr dev, InternalEvent *event, ScreenPtr screen)
     InternalEvent mevent;       /* master event */
 
     verify_internal_event(event);
+
+    /* refuse events from disabled devices */
+    if (!dev->enabled)
+        return;
 
     /* Custom event handler */
     handler = miEventQueue.handlers[event->any.type];
@@ -547,6 +563,11 @@ mieqProcessDeviceEvent(DeviceIntPtr dev, InternalEvent *event, ScreenPtr screen)
     if (master)
         master->lastSlave = dev;
 #endif//_F_GESTURE_EXTENSION_
+#ifdef ENABLE_TTRACE
+    if (event->any.type == ET_KeyPress || event->any.type == ET_KeyRelease) {
+        TTRACE_INPUT_BEGIN("XORG:SERVER:mieqProcessDeviceEvent");
+    }
+#endif //ENABLE_TTRACE
 
     /* If someone's registered a custom event handler, let them
      * steal it. */
@@ -569,6 +590,11 @@ mieqProcessDeviceEvent(DeviceIntPtr dev, InternalEvent *event, ScreenPtr screen)
         if (master && !IsFloating(dev))
             master->public.processInputProc(&mevent, master);
     }
+#ifdef ENABLE_TTRACE
+        if (event->any.type == ET_KeyPress || event->any.type == ET_KeyRelease) {
+            TTRACE_INPUT_END();
+        }
+#endif //ENABLE_TTRACE
 }
 
 /* Call this from ProcessInputEvents(). */
@@ -590,7 +616,7 @@ mieqProcessInputEvents(void)
     if (n_enqueued >= (miEventQueue.nevents - (2 * QUEUE_RESERVED_SIZE)) &&
         miEventQueue.nevents < QUEUE_MAXIMUM_SIZE) {
         ErrorF("[mi] Increasing EQ size to %lu to prevent dropped events.\n",
-               miEventQueue.nevents << 1);
+               (unsigned long) (miEventQueue.nevents << 1));
         if (!mieqGrowQueue(&miEventQueue, miEventQueue.nevents << 1)) {
             ErrorF("[mi] Increasing the size of EQ failed.\n");
         }
@@ -598,7 +624,7 @@ mieqProcessInputEvents(void)
 
     if (miEventQueue.dropped) {
         ErrorF("[mi] EQ processing has resumed after %lu dropped events.\n",
-               miEventQueue.dropped);
+               (unsigned long) miEventQueue.dropped);
         ErrorF
             ("[mi] This may be caused my a misbehaving driver monopolizing the server's resources.\n");
         miEventQueue.dropped = 0;
@@ -633,11 +659,15 @@ mieqProcessInputEvents(void)
             DPMSSet(serverClient, DPMSModeOn);
 #endif
 #endif
-
-        mieqProcessDeviceEvent(dev, &event, screen);
+        if (dev)
+            mieqProcessDeviceEvent(dev, &event, screen);
 
         /* Update the sprite now. Next event may be from different device. */
-        if (event.any.type == ET_Motion && master)
+        if (master &&
+            (event.any.type == ET_Motion ||
+             ((event.any.type == ET_TouchBegin ||
+               event.any.type == ET_TouchUpdate) &&
+              event.device_event.flags & TOUCH_POINTER_EMULATED)))
             miPointerUpdateSprite(dev);
 
 #ifdef XQUARTZ

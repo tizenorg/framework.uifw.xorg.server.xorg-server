@@ -68,6 +68,11 @@ extern void SmackExtensionInit(INITARGS);
 #include "xsmack.h"
 #endif
 
+#ifdef CONTAINER
+extern void ContainerExtensionInit(void);
+#include "container.h"
+#endif // _F_CONTAINER_EXTENSION_
+
 #ifdef XEVIE
 extern void XevieExtensionInit(void);
 #endif

@@ -1,8 +1,18 @@
 AUTOMAKE_OPTIONS=nostdinc
+
+# Required for automake < 1.14
 ACLOCAL_AMFLAGS = -I m4
 
 if COMPOSITE
 COMPOSITE_DIR=composite
+endif
+
+if HWC
+HWC_DIR=hwc
+endif
+
+if HWA
+HWA_DIR=hwa
 endif
 
 if GLX
@@ -15,6 +25,26 @@ endif
 
 if RECORD
 RECORD_DIR=record
+endif
+
+if DRI3
+DRI3_DIR=dri3
+endif
+
+if PRESENT
+PRESENT_DIR=present
+endif
+
+if CONTAINER
+CONTAINER_DIR=container
+endif
+
+if PSEUDORAMIX
+PSEUDORAMIX_DIR=pseudoramiX
+endif
+
+if GLAMOR
+GLAMOR_DIR=glamor
 endif
 
 SUBDIRS = \
@@ -31,16 +61,22 @@ SUBDIRS = \
 	render  \
 	Xi \
 	xkb \
+	$(PSEUDORAMIX_DIR) \
 	$(DBE_DIR) \
 	$(RECORD_DIR) \
 	xfixes \
 	damageext \
 	$(COMPOSITE_DIR) \
 	$(GLX_DIR) \
+	$(PRESENT_DIR) \
+	$(DRI3_DIR) \
 	exa \
+	$(GLAMOR_DIR) \
 	config \
 	gesture \
-	hwc \
+	$(HWC_DIR) \
+	$(HWA_DIR) \
+	$(CONTAINER_DIR) \
 	hw \
 	test
 
@@ -79,6 +115,7 @@ DIST_SUBDIRS = \
 	Xext \
 	miext \
 	os \
+	pseudoramiX \
 	randr \
 	render  \
 	Xi \
@@ -90,8 +127,14 @@ DIST_SUBDIRS = \
 	composite \
 	glx \
 	exa \
+	glamor \
 	config \
 	hw \
+	hwc \
+	hwa \
+	container \
+	present \
+	dri3 \
 	test
 
 # gross hack

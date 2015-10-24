@@ -74,7 +74,7 @@ ProcXFixesQueryVersion(ClientPtr client)
 
     if (version_compare(stuff->majorVersion, stuff->minorVersion,
                         SERVER_XFIXES_MAJOR_VERSION,
-                        SERVER_XFIXES_MAJOR_VERSION) < 0) {
+                        SERVER_XFIXES_MINOR_VERSION) < 0) {
         rep.majorVersion = stuff->majorVersion;
         rep.minorVersion = stuff->minorVersion;
     }
@@ -213,7 +213,7 @@ SProcXFixesDispatch(ClientPtr client)
 }
 
 static void
-XFixesClientCallback(CallbackListPtr *list, pointer closure, pointer data)
+XFixesClientCallback(CallbackListPtr *list, void *closure, void *data)
 {
     NewClientInfoRec *clientinfo = (NewClientInfoRec *) data;
     ClientPtr pClient = clientinfo->client;

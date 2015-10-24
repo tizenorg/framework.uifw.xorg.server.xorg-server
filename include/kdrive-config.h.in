@@ -32,7 +32,9 @@
 #undef DEBUG
 
 /* Have the backtrace() function. */
+#if SUPPORT_BACKTRACE
 #undef HAVE_BACKTRACE
+#endif
 
 /* Have execinfo.h for backtrace(). */
 #undef HAVE_EXECINFO_H

@@ -83,6 +83,10 @@ typedef struct _Pixmap {
     unsigned usage_hint;        /* see CREATE_PIXMAP_USAGE_* */
 
     PixmapPtr master_pixmap;    /* pointer to master copy of pixmap for pixmap sharing */
+
+#if defined (_F_PRESENT_PIXMAP_SWAP_) || defined (_F_PRESENT_HWC_FLIP_)
+    XID destroy_pixmap_id;
+#endif //_F_PRESENT_PIXMAP_SWAP_
 } PixmapRec;
 
 typedef struct _PixmapDirtyUpdate {
@@ -113,3 +117,4 @@ PixmapRegionInit(RegionPtr region, PixmapPtr pixmap)
 }
 
 #endif                          /* PIXMAPSTRUCT_H */
+
